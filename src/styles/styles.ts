@@ -26,7 +26,26 @@ const styles = StyleSheet.create({
         fontWeight: 'bold',
         marginBottom: 10,
     },
-    // Add any other existing styles here
+
+    // Yeni stiller
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+
+    offlineBanner: {
+        backgroundColor: '#FFA500',
+        padding: 10,
+        alignItems: 'center',
+        width: '100%',
+    },
+    offlineWarning: {
+        color: '#FFA500',
+        textAlign: 'center',
+        marginBottom: 10,
+    },
+// Add any other existing styles here
 });
 
 export default styles;

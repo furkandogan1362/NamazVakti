@@ -1,3 +1,14 @@
+// NextPrayerTime.tsx
+/**
+ * Sonraki namaz vaktini gösteren bileşen
+ * Bu bileşen, bir sonraki namaz vaktine kalan süreyi gerçek zamanlı
+ * olarak hesaplar ve gösterir.
+ * Özellikler:
+ * - Sonraki namaz vaktini belirler
+ * - Kalan süreyi saat, dakika ve saniye olarak gösterir
+ * - Otomatik olarak güncellenir
+ */
+
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 

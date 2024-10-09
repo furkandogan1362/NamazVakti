@@ -17,26 +17,26 @@ export const fetchPrayerTimesByLocationId = async (locationId: number): Promise<
     try {
         const response = await axios.get(`${BASE_URL}/prayertimes`, {
             params: {
-                location_id: locationId, // Using location_id as per the new pattern
+                location_id: locationId,
+                days: 30,
             },
         });
-        return response.data; // Expecting the data structure you provided
+        console.log('API Response:', JSON.stringify(response.data, null, 2));
+        return response.data;
     } catch (error: any) {
         console.error('Error fetching prayer times:', error.response?.data || error.message);
-        throw error; // Re-throw to handle later if needed
+        throw error;
     }
 };
 
 export const fetchRegions = async (country: string, city: string): Promise<any[]> => {
     try {
         const response = await axios.get(`${BASE_URL}/locations`, {
-            params: { country, city }, // Correctly use the locations API
+            params: { country, city },
         });
-        // Assuming response.data is an array of objects with { id: location_id, region: region_name }
         return response.data;
     } catch (error: any) {
         console.error('Error loading regions:', error.response?.data || error.message);
-        throw error; // Re-throw the error to handle it later if needed
+        throw error;
     }
 };
-

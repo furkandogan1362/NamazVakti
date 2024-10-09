@@ -1,37 +1,36 @@
 // LocationPicker.tsx
+
+/**
+ * Konum seçimi için kullanıcı arayüzü bileşeni
+ * Bu bileşen, kullanıcının ülke, şehir ve bölge seçimi yapabilmesini sağlar.
+ * LocationContext ile entegre çalışır.
+ * Özellikler:
+ * - Kademeli konum seçimi (ülke -> şehir -> bölge)
+ * - Seçilen konumu context üzerinden günceller
+ * - Dinamik olarak güncellenen seçenekler
+ */
+
 import React from 'react';
 import { View, Text } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
+import { useLocation } from '../contexts/LocationContext';
 
-interface LocationPickerProps {
-    countries: string[];
-    cities: string[];
-    regions: any[];
-    selectedCountry: string;
-    selectedCity: string;
-    selectedRegion: string;
-    setSelectedCountry: (country: string) => void;
-    setSelectedCity: (city: string) => void;
-    setSelectedRegion: (region: string) => void;
-}
+const LocationPicker: React.FC = () => {
+    const {
+        countries,
+        cities,
+        regions,
+        selectedLocation,
+        setSelectedLocation,
+    } = useLocation();
 
-const LocationPicker: React.FC<LocationPickerProps> = ({
-    countries,
-    cities,
-    regions,
-    selectedCountry,
-    selectedCity,
-    selectedRegion,
-    setSelectedCountry,
-    setSelectedCity,
-    setSelectedRegion,
-}) => {
     return (
         <View>
             <Text>Select Country:</Text>
             <Picker
-                selectedValue={selectedCountry}
-                onValueChange={(itemValue: string) => setSelectedCountry(itemValue)}
+                selectedValue={selectedLocation.country}
+                onValueChange={(country: string) =>
+                    setSelectedLocation({...selectedLocation, country, city: '', region: ''})}
             >
                 {countries.map((country) => (
                     <Picker.Item key={country} label={country} value={country} />
@@ -40,8 +39,9 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
 
             <Text>Select City:</Text>
             <Picker
-                selectedValue={selectedCity}
-                onValueChange={(itemValue: string) => setSelectedCity(itemValue)}
+                selectedValue={selectedLocation.city}
+                onValueChange={(city: string) =>
+                    setSelectedLocation({...selectedLocation, city, region: ''})}
             >
                 {cities.map((city) => (
                     <Picker.Item key={city} label={city} value={city} />
@@ -50,8 +50,9 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
 
             <Text>Select Region:</Text>
             <Picker
-                selectedValue={selectedRegion}
-                onValueChange={(itemValue: string) => setSelectedRegion(itemValue)}
+                selectedValue={selectedLocation.region}
+                onValueChange={(region: string) =>
+                    setSelectedLocation({...selectedLocation, region})}
             >
                 {regions.map((region) => (
                     <Picker.Item key={region.id} label={region.region} value={region.region} />
