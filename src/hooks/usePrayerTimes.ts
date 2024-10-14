@@ -9,6 +9,7 @@
  * - Çevrimdışı kullanım için verileri saklar
  * - Son güncelleme tarihini takip eder
  */
+
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from '../contexts/LocationContext';
 import { useNetwork } from '../contexts/NetworkContext';
@@ -18,7 +19,6 @@ import {
     loadPrayerTimes,
     saveLastFetchDate,
     loadLastFetchDate,
-    saveLocationData,
 } from '../services/storageService';
 import { PrayerTime } from '../types/types';
 
@@ -32,10 +32,10 @@ export const usePrayerTimes = () => {
     const updateCurrentDayPrayerTime = useCallback(() => {
         const now = new Date();
         const today = now.toISOString().split('T')[0];
-        
+
         if (allPrayerTimes.length > 0) {
             const currentDay = allPrayerTimes.find(pt => pt.date.split('T')[0] === today);
-            
+
             if (currentDay) {
                 const ishaTime = new Date(today + 'T' + currentDay.isha);
                 const nextDay = allPrayerTimes.find(pt => {
@@ -53,6 +53,27 @@ export const usePrayerTimes = () => {
         }
     }, [allPrayerTimes]);
 
+    const fetchPrayerTimes = useCallback(async () => {
+        if (isOnline) {
+            try {
+                const { country, city, region } = selectedLocation;
+                if (country && city && region && regions.length) {
+                    const selectedRegionObject = regions.find(r => r.region === region);
+                    if (selectedRegionObject) {
+                        const data = await fetchPrayerTimesByLocationId(selectedRegionObject.id);
+                        setAllPrayerTimes(data);
+                        savePrayerTimes(data);
+                        const newFetchDate = new Date();
+                        setLastFetchDate(newFetchDate);
+                        saveLastFetchDate(newFetchDate);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching prayer times:', error);
+            }
+        }
+    }, [selectedLocation, regions, isOnline]);
+
     useEffect(() => {
         const initializePrayerTimes = async () => {
             const savedTimes = await loadPrayerTimes();
@@ -63,47 +84,19 @@ export const usePrayerTimes = () => {
         initializePrayerTimes();
     }, []);
 
-    const shouldFetchNewData = useCallback(() => {
-        if (!lastFetchDate) return true;
-        const daysSinceLastFetch = Math.floor((new Date().getTime() - lastFetchDate.getTime()) / (1000 * 60 * 60 * 24));
-        return daysSinceLastFetch >= 29;
-    }, [lastFetchDate]);
-
     useEffect(() => {
-        const fetchPrayerTimes = async () => {
-            if (isOnline && shouldFetchNewData()) {
-                try {
-                    const { country, city, region } = selectedLocation;
-                    if (country && city && region && regions.length) {
-                        const selectedRegionObject = regions.find(r => r.region === region);
-                        if (selectedRegionObject) {
-                            const data = await fetchPrayerTimesByLocationId(selectedRegionObject.id);
-                            setAllPrayerTimes(data);
-                            savePrayerTimes(data);
-                            saveLocationData(selectedLocation);
-                            const newFetchDate = new Date();
-                            setLastFetchDate(newFetchDate);
-                            saveLastFetchDate(newFetchDate);
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error fetching prayer times:', error);
-                }
-            }
-        };
-
         fetchPrayerTimes();
-    }, [selectedLocation, regions, isOnline, shouldFetchNewData]);
+    }, [fetchPrayerTimes]);
 
     useEffect(() => {
         updateCurrentDayPrayerTime();
-        
+
         const interval = setInterval(() => {
             updateCurrentDayPrayerTime();
         }, 60000); // Her dakika kontrol et
 
         return () => clearInterval(interval);
-    }, [allPrayerTimes, updateCurrentDayPrayerTime]);
+    }, [allPrayerTimes, updateCurrentDayPrayerTime, lastFetchDate]);
 
     return currentDayPrayerTime;
 };

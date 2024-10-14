@@ -9,12 +9,11 @@
  * - Kaydedilmiş konum verilerini geri yükler
  * - Konum değişikliklerini takip eder ve gerekli güncellemeleri yapar
  */
-
 import { useEffect } from 'react';
 import { useLocation } from '../contexts/LocationContext';
 import { useNetwork } from '../contexts/NetworkContext';
 import { fetchCountries, fetchCities, fetchRegions } from '../api/apiService';
-import { loadLocationData } from '../services/storageService';
+import { loadLocationData, saveLocationData } from '../services/storageService';
 
 export const useLocationData = () => {
     const {
@@ -79,4 +78,10 @@ export const useLocationData = () => {
         };
         loadRegions();
     }, [selectedLocation.country, selectedLocation.city, isOnline, setRegions]);
+
+    useEffect(() => {
+        if (selectedLocation.country && selectedLocation.city && selectedLocation.region) {
+            saveLocationData(selectedLocation);
+        }
+    }, [selectedLocation]);
 };

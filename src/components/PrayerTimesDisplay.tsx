@@ -43,12 +43,12 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({ prayerTimes }) 
             times[prayerKey] = hours * 60 + minutes;
         });
 
-        if (currentTime < times.fajr) return 'isha';
-        if (currentTime < times.sun) return 'fajr';
-        if (currentTime < times.dhuhr) return 'sun';
-        if (currentTime < times.asr) return 'dhuhr';
-        if (currentTime < times.maghrib) return 'asr';
-        if (currentTime < times.isha) return 'maghrib';
+        if (currentTime < times.fajr) {return 'isha';}
+        if (currentTime < times.sun) {return 'fajr';}
+        if (currentTime < times.dhuhr) {return 'sun';}
+        if (currentTime < times.asr) {return 'dhuhr';}
+        if (currentTime < times.maghrib) {return 'asr';}
+        if (currentTime < times.isha) {return 'maghrib';}
         return 'isha';
     };
 

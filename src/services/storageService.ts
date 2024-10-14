@@ -67,3 +67,12 @@ export const loadLastFetchDate = async (): Promise<Date | null> => {
         return null;
     }
 };
+
+export const clearStoredData = async (): Promise<void> => {
+    try {
+        await AsyncStorage.removeItem('prayerTimes');
+        await AsyncStorage.removeItem('lastFetchDate');
+    } catch (error) {
+        console.error('Error clearing stored data:', error);
+    }
+};
