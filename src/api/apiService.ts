@@ -21,7 +21,7 @@ export const fetchPrayerTimesByLocationId = async (locationId: number): Promise<
                 days: 30,
             },
         });
-        console.log('API Response:', JSON.stringify(response.data, null, 2));
+        //console.log('API Response:', JSON.stringify(response.data, null, 2));
         return response.data;
     } catch (error: any) {
         console.error('Error fetching prayer times:', error.response?.data || error.message);

@@ -11,10 +11,11 @@
  */
 
 import React from 'react';
-import { View, Text } from 'react-native';
+import { View, Text, StyleSheet } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
 import { PrayerTime } from '../types/types';
 import NextPrayerTime from './NextPrayerTime';
-import PrayerTimesStyles from '../styles/PrayerTimesStyles';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface PrayerTimesDisplayProps {
     prayerTimes: PrayerTime;
@@ -23,6 +24,8 @@ interface PrayerTimesDisplayProps {
 type PrayerKey = keyof Omit<PrayerTime, 'date'>;
 
 const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({ prayerTimes }) => {
+    const { theme, isSmallScreen, screenWidth } = useTheme();
+
     const prayerNames: Record<PrayerKey, string> = {
         fajr: 'İmsak',
         sun: 'Güneş',
@@ -53,35 +56,93 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({ prayerTimes }) 
     };
 
     const currentPrayer = getCurrentPrayer();
+    const styles = createStyles(theme, isSmallScreen, screenWidth);
 
     return (
         <View>
             <NextPrayerTime prayerTimes={prayerTimes} />
-            <View style={PrayerTimesStyles.prayerTimesGrid}>
+            <View style={styles.prayerTimesGrid}>
                 {Object.entries(prayerNames).map(([key, name]) => {
                     const prayerKey = key as PrayerKey;
-                    return (
-                        <View
+                    const isActive = prayerKey === currentPrayer;
+                    
+                    return isActive ? (
+                        <LinearGradient
                             key={prayerKey}
-                            style={[
-                                PrayerTimesStyles.prayerTimeCard,
-                                prayerKey === currentPrayer && PrayerTimesStyles.activePrayerCard,
-                            ]}
+                            colors={theme.colors.activeCard}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 1 }}
+                            style={styles.prayerTimeCard}
                         >
-                            <Text style={[
-                                PrayerTimesStyles.prayerName,
-                                prayerKey === currentPrayer && PrayerTimesStyles.activePrayerText,
-                            ]}>{name}</Text>
-                            <Text style={[
-                                PrayerTimesStyles.prayerTime,
-                                prayerKey === currentPrayer && PrayerTimesStyles.activePrayerText,
-                            ]}>{prayerTimes[prayerKey]}</Text>
+                            <Text style={styles.activePrayerName}>{name}</Text>
+                            <Text style={styles.activePrayerTime}>{prayerTimes[prayerKey]}</Text>
+                        </LinearGradient>
+                    ) : (
+                        <View key={prayerKey} style={styles.prayerTimeCard}>
+                            <Text style={styles.prayerName}>{name}</Text>
+                            <Text style={styles.prayerTime}>{prayerTimes[prayerKey]}</Text>
                         </View>
                     );
                 })}
             </View>
         </View>
     );
+};
+
+const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) => {
+    const cardPadding = isSmallScreen ? 12 : screenWidth < 768 ? 15 : 18;
+    const fontSize = isSmallScreen ? 13 : screenWidth < 768 ? 15 : 17;
+    const timeSize = isSmallScreen ? 18 : screenWidth < 768 ? 22 : 26;
+    const columns = isSmallScreen ? 2 : screenWidth < 768 ? 3 : 3;
+    const gap = isSmallScreen ? 8 : 12;
+
+    return StyleSheet.create({
+        prayerTimesGrid: {
+            flexDirection: 'row',
+            flexWrap: 'wrap',
+            justifyContent: 'space-between',
+            gap: gap,
+            marginTop: 20,
+        },
+        prayerTimeCard: {
+            backgroundColor: theme.colors.cardBackground,
+            borderRadius: 12,
+            padding: cardPadding,
+            width: `${(100 - (columns - 1) * 2) / columns}%`,
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            shadowColor: theme.colors.shadow,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 3,
+            elevation: 3,
+            minHeight: isSmallScreen ? 70 : 80,
+            justifyContent: 'center',
+        },
+        prayerName: {
+            fontSize: fontSize,
+            fontWeight: '600',
+            color: theme.colors.text,
+            marginBottom: 5,
+        },
+        prayerTime: {
+            fontSize: timeSize,
+            fontWeight: 'bold',
+            color: theme.colors.text,
+        },
+        activePrayerName: {
+            fontSize: fontSize,
+            fontWeight: '600',
+            color: theme.colors.activeText,
+            marginBottom: 5,
+        },
+        activePrayerTime: {
+            fontSize: timeSize,
+            fontWeight: 'bold',
+            color: theme.colors.activeText,
+        },
+    });
 };
 
 export default PrayerTimesDisplay;

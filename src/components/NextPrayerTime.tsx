@@ -11,6 +11,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import LinearGradient from 'react-native-linear-gradient';
+import { useTheme } from '../contexts/ThemeContext';
 
 interface PrayerTimes {
     fajr: string;
@@ -28,6 +30,16 @@ interface Props {
 const NextPrayerTime: React.FC<Props> = ({ prayerTimes }) => {
     const [timeUntilNextPrayer, setTimeUntilNextPrayer] = useState<string>('');
     const [nextPrayer, setNextPrayer] = useState<string>('');
+    const { theme, isSmallScreen, screenWidth } = useTheme();
+
+    const prayerNamesturkish: Record<string, string> = {
+        Fajr: 'İmsak',
+        Sun: 'Güneş',
+        Dhuhr: 'Öğle',
+        Asr: 'İkindi',
+        Maghrib: 'Akşam',
+        Isha: 'Yatsı',
+    };
 
     useEffect(() => {
         if (!prayerTimes) {return;}
@@ -84,29 +96,65 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes }) => {
         return () => clearInterval(interval); // Cleanup on unmount
     }, [prayerTimes]);
 
+    const styles = createStyles(theme, isSmallScreen, screenWidth);
+    const turkishPrayerName = prayerNamesturkish[nextPrayer] || nextPrayer;
+
     return (
-        <View style={styles.container}>
+        <LinearGradient
+            colors={theme.colors.activeCard}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.container}
+        >
             {nextPrayer && (
-                <Text style={styles.text}>
-                    Time until next prayer ({nextPrayer}): {timeUntilNextPrayer}
-                </Text>
+                <View style={styles.content}>
+                    <Text style={styles.label}>Sonraki Namaz</Text>
+                    <Text style={styles.prayerName}>{turkishPrayerName}</Text>
+                    <Text style={styles.timeText}>{timeUntilNextPrayer}</Text>
+                </View>
             )}
-        </View>
+        </LinearGradient>
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        marginTop: 20,
-        padding: 10,
-        backgroundColor: '#f0f0f0',
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    text: {
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-});
+const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) => {
+    const padding = isSmallScreen ? 15 : screenWidth < 768 ? 18 : 20;
+    const labelSize = isSmallScreen ? 13 : screenWidth < 768 ? 14 : 16;
+    const prayerSize = isSmallScreen ? 20 : screenWidth < 768 ? 24 : 28;
+    const timeSize = isSmallScreen ? 16 : screenWidth < 768 ? 18 : 20;
+
+    return StyleSheet.create({
+        container: {
+            padding: padding,
+            borderRadius: 12,
+            shadowColor: theme.colors.shadow,
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.2,
+            shadowRadius: 4,
+            elevation: 5,
+        },
+        content: {
+            alignItems: 'center',
+        },
+        label: {
+            fontSize: labelSize,
+            fontWeight: '600',
+            color: theme.colors.activeText,
+            opacity: 0.9,
+            marginBottom: 5,
+        },
+        prayerName: {
+            fontSize: prayerSize,
+            fontWeight: 'bold',
+            color: theme.colors.activeText,
+            marginBottom: 8,
+        },
+        timeText: {
+            fontSize: timeSize,
+            fontWeight: '600',
+            color: theme.colors.activeText,
+        },
+    });
+};
 
 export default NextPrayerTime;

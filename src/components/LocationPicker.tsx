@@ -1,9 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useLocation } from '../contexts/LocationContext';
+import { useTheme } from '../contexts/ThemeContext';
 
-const LocationPicker: React.FC = () => {
+interface LocationPickerProps {
+    onClose: () => void;
+}
+
+const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
     const {
         countries,
         cities,
@@ -11,6 +16,15 @@ const LocationPicker: React.FC = () => {
         selectedLocation,
         setSelectedLocation,
     } = useLocation();
+    const { theme, isSmallScreen, screenWidth } = useTheme();
+
+    const handleConfirmLocation = () => {
+        if (selectedLocation.country && selectedLocation.city && selectedLocation.region) {
+            onClose();
+        }
+    };
+
+    const styles = createStyles(theme, isSmallScreen, screenWidth);
 
     return (
         <View style={styles.container}>
@@ -54,27 +68,72 @@ const LocationPicker: React.FC = () => {
                     <Picker.Item key={region.id} label={region.region} value={region.region} />
                 ))}
             </Picker>
+
+            {selectedLocation.country && selectedLocation.city && selectedLocation.region && (
+                <TouchableOpacity
+                    style={styles.confirmButton}
+                    onPress={handleConfirmLocation}
+                >
+                    <Text style={styles.confirmButtonText}>✓ Konumu Onayla</Text>
+                </TouchableOpacity>
+            )}
         </View>
     );
 };
 
-const styles = StyleSheet.create({
-    container: {
-        width: '100%',
-        paddingHorizontal: 10,
-    },
-    label: {
-        fontSize: 16,
-        fontWeight: 'bold',
-        marginTop: 10,
-        marginBottom: 5,
-    },
-    picker: {
-        width: '100%',
-        height: 50,
-        backgroundColor: '#f0f0f0',
-        marginBottom: 10,
-    },
-});
+const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) => {
+    const padding = isSmallScreen ? 10 : screenWidth < 768 ? 15 : 20;
+    const fontSize = isSmallScreen ? 14 : screenWidth < 768 ? 16 : 18;
+
+    return StyleSheet.create({
+        container: {
+            width: '100%',
+            backgroundColor: theme.colors.cardBackground,
+            borderRadius: 12,
+            padding: padding,
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            shadowColor: theme.colors.shadow,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.1,
+            shadowRadius: 4,
+            elevation: 3,
+        },
+        label: {
+            fontSize: fontSize,
+            fontWeight: 'bold',
+            marginTop: 10,
+            marginBottom: 8,
+            color: theme.colors.text,
+        },
+        picker: {
+            width: '100%',
+            height: isSmallScreen ? 45 : 50,
+            backgroundColor: theme.colors.pickerBackground,
+            borderRadius: 8,
+            marginBottom: 10,
+            borderWidth: 1,
+            borderColor: theme.colors.pickerBorder,
+            color: theme.colors.text,
+        },
+        confirmButton: {
+            marginTop: 20,
+            backgroundColor: '#4CAF50',
+            padding: 15,
+            borderRadius: 10,
+            alignItems: 'center',
+            shadowColor: theme.colors.shadow,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 3,
+            elevation: 4,
+        },
+        confirmButtonText: {
+            color: '#FFFFFF',
+            fontSize: fontSize,
+            fontWeight: 'bold',
+        },
+    });
+};
 
 export default LocationPicker;
