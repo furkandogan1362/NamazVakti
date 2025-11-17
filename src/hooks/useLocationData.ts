@@ -13,7 +13,16 @@ import { useEffect } from 'react';
 import { useLocation } from '../contexts/LocationContext';
 import { useNetwork } from '../contexts/NetworkContext';
 import { fetchCountries, fetchCities, fetchRegions } from '../api/apiService';
-import { loadLocationData, saveLocationData } from '../services/storageService';
+import {
+    loadLocationData,
+    saveLocationData,
+    saveCountries,
+    loadCountries,
+    saveCities,
+    loadCities,
+    saveRegions,
+    loadRegions,
+} from '../services/storageService';
 
 export const useLocationData = () => {
     const {
@@ -38,46 +47,103 @@ export const useLocationData = () => {
     }, [setSelectedLocation, setIsSelectingLocation]);
 
     useEffect(() => {
-        const loadCountries = async () => {
+        const loadCountriesData = async () => {
+            // Stale-while-revalidate: Önce cache'i göster
+            const cachedCountries = await loadCountries();
+            if (cachedCountries && cachedCountries.length > 0) {
+                setCountries(cachedCountries);
+            }
+
+            // Arka planda API'den güncelle (sadece online ise)
             if (isOnline) {
                 try {
-                    const data = await fetchCountries();
-                    setCountries(data);
+                    const freshData = await fetchCountries();
+                    setCountries(freshData);
+                    saveCountries(freshData);
                 } catch (error) {
                     console.error('Error loading countries:', error);
+                    // Hata durumunda cache kullanılıyor (zaten yukarıda set edildi)
                 }
             }
         };
-        loadCountries();
+        loadCountriesData();
     }, [isOnline, setCountries]);
 
     useEffect(() => {
-        const loadCities = async () => {
-            if (isOnline && selectedLocation.country) {
-                try {
-                    const data = await fetchCities(selectedLocation.country);
-                    setCities(data);
-                } catch (error) {
-                    console.error('Error loading cities:', error);
+        const loadCitiesData = async () => {
+            if (selectedLocation.country) {
+                // Stale-while-revalidate: Önce cache'i göster
+                const cachedCities = await loadCities(selectedLocation.country);
+                if (cachedCities && cachedCities.length > 0) {
+                    setCities(cachedCities);
+                }
+
+                // Arka planda API'den güncelle (sadece online ise)
+                if (isOnline) {
+                    try {
+                        const freshData = await fetchCities(selectedLocation.country);
+                        setCities(freshData);
+                        saveCities(selectedLocation.country, freshData);
+                    } catch (error) {
+                        console.error('Error loading cities:', error);
+                    }
                 }
             }
         };
-        loadCities();
+        loadCitiesData();
     }, [selectedLocation.country, isOnline, setCities]);
 
     useEffect(() => {
-        const loadRegions = async () => {
-            if (isOnline && selectedLocation.country && selectedLocation.city) {
-                try {
-                    const data = await fetchRegions(selectedLocation.country, selectedLocation.city);
-                    setRegions(data);
-                } catch (error) {
-                    console.error('Error loading regions:', error);
+        const loadRegionsData = async () => {
+            if (selectedLocation.country && selectedLocation.city) {
+                // Stale-while-revalidate: Önce cache'i göster
+                const cachedRegions = await loadRegions(selectedLocation.country, selectedLocation.city);
+                if (cachedRegions && cachedRegions.length > 0) {
+                    const processedCached = cachedRegions.map(region => ({
+                        ...region,
+                        region: region.region || selectedLocation.city
+                    }));
+                    setRegions(processedCached);
+
+                    // Cache'den yüklendiğinde otomatik seçim yap
+                    if (processedCached.length === 1 && !selectedLocation.region) {
+                        setSelectedLocation({
+                            ...selectedLocation,
+                            region: processedCached[0].region
+                        });
+                    }
+                }
+
+                // Arka planda API'den güncelle (sadece online ise)
+                if (isOnline) {
+                    try {
+                        const freshData = await fetchRegions(selectedLocation.country, selectedLocation.city);
+                        
+                        if (freshData && freshData.length > 0) {
+                            const processedData = freshData.map(region => ({
+                                ...region,
+                                region: region.region || selectedLocation.city
+                            }));
+                            
+                            setRegions(processedData);
+                            saveRegions(selectedLocation.country, selectedLocation.city, processedData);
+                            
+                            // API'den yeni veri geldiğinde otomatik seçim yap
+                            if (processedData.length === 1 && !selectedLocation.region) {
+                                setSelectedLocation({
+                                    ...selectedLocation,
+                                    region: processedData[0].region
+                                });
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading regions:', error);
+                    }
                 }
             }
         };
-        loadRegions();
-    }, [selectedLocation.country, selectedLocation.city, isOnline, setRegions]);
+        loadRegionsData();
+    }, [selectedLocation.country, selectedLocation.city, selectedLocation.region, isOnline, setRegions, setSelectedLocation]);
 
     useEffect(() => {
         if (selectedLocation.country && selectedLocation.city && selectedLocation.region) {

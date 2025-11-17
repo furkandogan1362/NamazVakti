@@ -64,9 +64,17 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                 enabled={!!selectedLocation.city}
             >
                 <Picker.Item label="Choose a region" value="" />
-                {regions.map((region) => (
-                    <Picker.Item key={region.id} label={region.region} value={region.region} />
-                ))}
+                {regions.map((region) => {
+                    // Region adı boş veya null ise city adını göster
+                    const displayName = region.region || selectedLocation.city;
+                    return (
+                        <Picker.Item 
+                            key={region.id} 
+                            label={displayName} 
+                            value={displayName} 
+                        />
+                    );
+                })}
             </Picker>
 
             {selectedLocation.country && selectedLocation.city && selectedLocation.region && (
@@ -100,7 +108,7 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
             elevation: 3,
         },
         label: {
-            fontSize: fontSize,
+            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
             fontWeight: 'bold',
             marginTop: 10,
             marginBottom: 8,
@@ -130,7 +138,7 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
         },
         confirmButtonText: {
             color: '#FFFFFF',
-            fontSize: fontSize,
+            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
             fontWeight: 'bold',
         },
     });

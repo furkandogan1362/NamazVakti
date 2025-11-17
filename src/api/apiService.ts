@@ -3,19 +3,28 @@ import axios from 'axios';
 
 const BASE_URL = 'https://prayertimes.api.abdus.dev/api/diyanet';
 
+// API timeout süresi (10 saniye)
+const API_TIMEOUT = 10000;
+
+// Axios instance with timeout
+const apiClient = axios.create({
+    baseURL: BASE_URL,
+    timeout: API_TIMEOUT,
+});
+
 export const fetchCountries = async (): Promise<string[]> => {
-    const response = await axios.get<string[]>(`${BASE_URL}/countries`);
+    const response = await apiClient.get<string[]>('/countries');
     return response.data;
 };
 
 export const fetchCities = async (country: string): Promise<string[]> => {
-    const response = await axios.get<string[]>(`${BASE_URL}/countries/${country}/cities`);
+    const response = await apiClient.get<string[]>(`/countries/${country}/cities`);
     return response.data;
 };
 
 export const fetchPrayerTimesByLocationId = async (locationId: number): Promise<any> => {
     try {
-        const response = await axios.get(`${BASE_URL}/prayertimes`, {
+        const response = await apiClient.get('/prayertimes', {
             params: {
                 location_id: locationId,
                 days: 30,
@@ -31,7 +40,7 @@ export const fetchPrayerTimesByLocationId = async (locationId: number): Promise<
 
 export const fetchRegions = async (country: string, city: string): Promise<any[]> => {
     try {
-        const response = await axios.get(`${BASE_URL}/locations`, {
+        const response = await apiClient.get('/locations', {
             params: { country, city },
         });
         return response.data;

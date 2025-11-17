@@ -12,7 +12,7 @@
  * - Çevrimdışı/çevrimiçi durum yönetimi
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import LocationPicker from './components/LocationPicker';
@@ -22,14 +22,80 @@ import { LocationProvider, useLocation } from './contexts/LocationContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { useLocationData } from './hooks/useLocationData';
 import { usePrayerTimes } from './hooks/usePrayerTimes';
+import * as storageService from './services/storageService';
 
 const AppContent: React.FC = () => {
     const { isOnline } = useNetwork();
     const { selectedLocation } = useLocation();
     const { theme, toggleTheme, isSmallScreen, screenWidth } = useTheme();
-    const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
     const prayerTimes = usePrayerTimes();
     useLocationData();
+    
+    const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+    const [initialCheckDone, setInitialCheckDone] = useState(false);
+    const [hasCachedData, setHasCachedData] = useState(false);
+    const [previousLocation, setPreviousLocation] = useState<{
+        country: string;
+        city: string;
+        region: string;
+    } | null>(null);
+
+    const scrollViewRef = useRef<ScrollView>(null);
+
+    // İlk yüklemede cache kontrolü - render ÖNCESINDE
+    useEffect(() => {
+        const checkInitialCache = async () => {
+            const cachedPrayerData = await storageService.loadPrayerTimes();
+            const cachedLocationId = await storageService.loadLastLocationId();
+
+            // Cache'de veri varsa hoşgeldiniz ekranını hiç gösterme
+            if (cachedPrayerData || cachedLocationId) {
+                setHasCachedData(true);
+            }
+
+            // Sadece hiç veri yoksa location picker'ı aç
+            const hasLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
+            if (!hasLocation && !cachedPrayerData) {
+                setIsLocationPickerOpen(true);
+            }
+
+            setInitialCheckDone(true);
+        };
+
+        if (!initialCheckDone) {
+            checkInitialCache();
+        }
+    }, [initialCheckDone, selectedLocation]);
+
+    // Konum değişikliklerini takip et - TAM seçim yapılana kadar eski konumu sakla
+    useEffect(() => {
+        const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
+
+        if (hasFullLocation) {
+            // Tam konum seçildiğinde önceki konumu güncelle
+            setPreviousLocation({
+                country: selectedLocation.country,
+                city: selectedLocation.city,
+                region: selectedLocation.region,
+            });
+            setHasCachedData(true);
+        }
+    }, [selectedLocation]);    const handleToggleLocationPicker = () => {
+        const newState = !isLocationPickerOpen;
+        setIsLocationPickerOpen(newState);
+        
+        if (newState) {
+            // Lokasyon seçici açıldığında smooth bir şekilde en alta scroll et
+            setTimeout(() => {
+                scrollViewRef.current?.scrollToEnd({ animated: true });
+            }, 300);
+        } else {
+            // Kapatıldığında yukarı scroll et
+            setTimeout(() => {
+                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+            }, 100);
+        }
+    };
 
     const styles = createStyles(theme, isSmallScreen, screenWidth);
 
@@ -40,7 +106,10 @@ const AppContent: React.FC = () => {
             end={theme.gradientEnd}
             style={styles.gradientContainer}
         >
-            <ScrollView contentContainerStyle={styles.container}>
+            <ScrollView
+                ref={scrollViewRef}
+                contentContainerStyle={styles.container}
+            >
                 {/* Header with theme toggle */}
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Namaz Vakitleri</Text>
@@ -60,25 +129,46 @@ const AppContent: React.FC = () => {
                     </View>
                 )}
 
-                {/* Location Info */}
-                {selectedLocation.country && selectedLocation.city && selectedLocation.region && (
-                    <View style={styles.locationInfoContainer}>
-                        <Text style={styles.locationText}>
-                            {selectedLocation.country}, {selectedLocation.city}
-                        </Text>
-                        <Text style={styles.locationSubText}>
-                            {selectedLocation.region}
-                        </Text>
-                    </View>
-                )}
+                {/* Prayer Times Display - Konum bilgisi içinde */}
+                {(() => {
+                    const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
 
-                {/* Prayer Times Display */}
-                {prayerTimes && <PrayerTimesDisplay prayerTimes={prayerTimes} />}
+                    // Eğer tam konum seçiliyse veya önceki konum varsa verileri göster
+                    if (prayerTimes && (hasFullLocation || previousLocation)) {
+                        // Tam konum varsa onu kullan, yoksa önceki konumu göster
+                        const displayLocation = hasFullLocation ? selectedLocation : previousLocation;
+
+                        return (
+                            <PrayerTimesDisplay
+                                prayerTimes={prayerTimes}
+                                locationInfo={displayLocation!}
+                            />
+                        );
+                    }
+
+                    // Hoşgeldiniz ekranını sadece hiç veri yoksa ve initial check bittiyse göster
+                    if (!hasCachedData && initialCheckDone) {
+                        return (
+                            <View style={styles.welcomeContainer}>
+                                <Text style={styles.welcomeTitle}>Hoş Geldiniz! 🕌</Text>
+                                <Text style={styles.welcomeText}>
+                                    Namaz vakitlerini görmek için lütfen konumunuzu seçin.
+                                </Text>
+                                <Text style={styles.welcomeHint}>
+                                    👇 Aşağıdaki butona tıklayarak başlayın
+                                </Text>
+                            </View>
+                        );
+                    }
+
+                    // Henüz initial check bitmemişse hiçbir şey gösterme (loading state)
+                    return null;
+                })()}
 
                 {/* Location Picker Toggle Button */}
                 <TouchableOpacity
                     style={styles.locationToggleButton}
-                    onPress={() => setIsLocationPickerOpen(!isLocationPickerOpen)}
+                    onPress={handleToggleLocationPicker}
                     disabled={!isOnline}
                 >
                     <Text style={styles.locationToggleText}>
@@ -89,7 +179,12 @@ const AppContent: React.FC = () => {
                 {/* Location Picker - Collapsible */}
                 {isLocationPickerOpen && (
                     isOnline ? (
-                        <LocationPicker onClose={() => setIsLocationPickerOpen(false)} />
+                        <LocationPicker onClose={() => {
+                            setIsLocationPickerOpen(false);
+                            setTimeout(() => {
+                                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                            }, 100);
+                        }} />
                     ) : (
                         <View style={styles.offlineMessageContainer}>
                             <Text style={styles.offlineMessageText}>
@@ -117,7 +212,6 @@ const App: React.FC = () => {
 
 const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) => {
     const padding = isSmallScreen ? 10 : screenWidth < 768 ? 15 : 20;
-    const fontSize = isSmallScreen ? 14 : screenWidth < 768 ? 16 : 18;
 
     return StyleSheet.create({
         gradientContainer: {
@@ -136,7 +230,7 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
             paddingVertical: 15,
         },
         headerTitle: {
-            fontSize: isSmallScreen ? 24 : 28,
+            fontSize: isSmallScreen ? 22 : screenWidth < 768 ? 24 : 26,
             fontWeight: 'bold',
             color: theme.colors.headerText,
         },
@@ -165,33 +259,42 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
         },
         offlineText: {
             color: '#FFFFFF',
-            fontSize: fontSize,
+            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
             fontWeight: 'bold',
         },
-        locationInfoContainer: {
+        welcomeContainer: {
             backgroundColor: theme.colors.cardBackground,
-            padding: 15,
-            borderRadius: 12,
+            padding: isSmallScreen ? 25 : 30,
+            borderRadius: 15,
             marginBottom: 20,
             borderWidth: 1,
             borderColor: theme.colors.cardBorder,
             shadowColor: theme.colors.shadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.15,
             shadowRadius: 4,
-            elevation: 3,
+            elevation: 5,
+            alignItems: 'center',
         },
-        locationText: {
-            fontSize: fontSize + 2,
+        welcomeTitle: {
+            fontSize: isSmallScreen ? 22 : screenWidth < 768 ? 24 : 26,
             fontWeight: 'bold',
             color: theme.colors.text,
+            marginBottom: 15,
             textAlign: 'center',
         },
-        locationSubText: {
-            fontSize: fontSize - 2,
+        welcomeText: {
+            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
+            color: theme.colors.text,
+            textAlign: 'center',
+            marginBottom: 10,
+            lineHeight: 22,
+        },
+        welcomeHint: {
+            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
             color: theme.colors.secondaryText,
             textAlign: 'center',
-            marginTop: 5,
+            marginTop: 10,
         },
         locationToggleButton: {
             backgroundColor: theme.colors.buttonBackground,
@@ -208,7 +311,7 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
         },
         locationToggleText: {
             color: theme.colors.buttonText,
-            fontSize: fontSize,
+            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
             fontWeight: 'bold',
         },
         offlineMessageContainer: {
@@ -220,7 +323,7 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
         },
         offlineMessageText: {
             color: theme.colors.text,
-            fontSize: fontSize,
+            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
             textAlign: 'center',
         },
     });

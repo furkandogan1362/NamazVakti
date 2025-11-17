@@ -82,7 +82,7 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes }) => {
                 const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
                 const seconds = Math.floor((diff % (1000 * 60)) / 1000);
 
-                setTimeUntilNextPrayer(`${hours}h ${minutes}m ${seconds}s`);
+                setTimeUntilNextPrayer(`${hours.toString().padStart(2, '0')} : ${minutes.toString().padStart(2, '0')} : ${seconds.toString().padStart(2, '0')}`);
                 setNextPrayer(nextPrayerName);
             }
         };
@@ -108,7 +108,7 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes }) => {
         >
             {nextPrayer && (
                 <View style={styles.content}>
-                    <Text style={styles.label}>Sonraki Namaz</Text>
+                    <Text style={styles.label}>Sonraki Vakit</Text>
                     <Text style={styles.prayerName}>{turkishPrayerName}</Text>
                     <Text style={styles.timeText}>{timeUntilNextPrayer}</Text>
                 </View>
@@ -118,10 +118,10 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes }) => {
 };
 
 const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) => {
-    const padding = isSmallScreen ? 15 : screenWidth < 768 ? 18 : 20;
-    const labelSize = isSmallScreen ? 13 : screenWidth < 768 ? 14 : 16;
-    const prayerSize = isSmallScreen ? 20 : screenWidth < 768 ? 24 : 28;
-    const timeSize = isSmallScreen ? 16 : screenWidth < 768 ? 18 : 20;
+    const padding = isSmallScreen ? 20 : screenWidth < 768 ? 25 : 30;
+    const labelSize = isSmallScreen ? 16 : screenWidth < 768 ? 17 : 18;
+    const prayerSize = isSmallScreen ? 22 : screenWidth < 768 ? 24 : 26;
+    const timeSize = isSmallScreen ? 28 : screenWidth < 768 ? 32 : 36;
 
     return StyleSheet.create({
         container: {

@@ -68,10 +68,87 @@ export const loadLastFetchDate = async (): Promise<Date | null> => {
     }
 };
 
+export const saveLastLocationId = async (locationId: number): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('lastLocationId', locationId.toString());
+    } catch (error) {
+        console.error('Error saving last location ID:', error);
+    }
+};
+
+export const loadLastLocationId = async (): Promise<number | null> => {
+    try {
+        const savedId = await AsyncStorage.getItem('lastLocationId');
+        return savedId ? parseInt(savedId, 10) : null;
+    } catch (error) {
+        console.error('Error loading last location ID:', error);
+        return null;
+    }
+};
+
+// Ülke listesi cache
+export const saveCountries = async (countries: string[]): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('countries', JSON.stringify(countries));
+    } catch (error) {
+        console.error('Error saving countries:', error);
+    }
+};
+
+export const loadCountries = async (): Promise<string[] | null> => {
+    try {
+        const savedCountries = await AsyncStorage.getItem('countries');
+        return savedCountries ? JSON.parse(savedCountries) : null;
+    } catch (error) {
+        console.error('Error loading countries:', error);
+        return null;
+    }
+};
+
+// Şehir listesi cache (ülkeye göre)
+export const saveCities = async (country: string, cities: string[]): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(`cities_${country}`, JSON.stringify(cities));
+    } catch (error) {
+        console.error('Error saving cities:', error);
+    }
+};
+
+export const loadCities = async (country: string): Promise<string[] | null> => {
+    try {
+        const savedCities = await AsyncStorage.getItem(`cities_${country}`);
+        return savedCities ? JSON.parse(savedCities) : null;
+    } catch (error) {
+        console.error('Error loading cities:', error);
+        return null;
+    }
+};
+
+// Bölge listesi cache (ülke ve şehre göre)
+export const saveRegions = async (country: string, city: string, regions: any[]): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(`regions_${country}_${city}`, JSON.stringify(regions));
+    } catch (error) {
+        console.error('Error saving regions:', error);
+    }
+};
+
+export const loadRegions = async (country: string, city: string): Promise<any[] | null> => {
+    try {
+        const savedRegions = await AsyncStorage.getItem(`regions_${country}_${city}`);
+        return savedRegions ? JSON.parse(savedRegions) : null;
+    } catch (error) {
+        console.error('Error loading regions:', error);
+        return null;
+    }
+};
+
 export const clearStoredData = async (): Promise<void> => {
     try {
         await AsyncStorage.removeItem('prayerTimes');
         await AsyncStorage.removeItem('lastFetchDate');
+        await AsyncStorage.removeItem('lastLocationId');
+        // Location cache'leri silmiyoruz, onlar kalıcı
     } catch (error) {
         console.error('Error clearing stored data:', error);
     }

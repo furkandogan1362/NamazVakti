@@ -29,5 +29,8 @@ export interface PrayerTime {
     asr: string;
     maghrib: string;
     isha: string;
-    [key: string]: string; // Index signature ekledik
+    hijriDate?: string;
+    hijriMonth?: string;
+    hijriYear?: string;
+    [key: string]: string | undefined; // Index signature ekledik
 }
