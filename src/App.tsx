@@ -12,11 +12,13 @@
  * - Çevrimdışı/çevrimiçi durum yönetimi
  */
 
-import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from 'react-native';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import LocationPicker from './components/LocationPicker';
 import PrayerTimesDisplay from './components/PrayerTimesDisplay';
+import WeeklyPrayerTimes from './screens/WeeklyPrayerTimes';
+import MonthlyPrayerTimes from './screens/MonthlyPrayerTimes';
 import { NetworkProvider, useNetwork } from './contexts/NetworkContext';
 import { LocationProvider, useLocation } from './contexts/LocationContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
@@ -24,16 +26,20 @@ import { useLocationData } from './hooks/useLocationData';
 import { usePrayerTimes } from './hooks/usePrayerTimes';
 import * as storageService from './services/storageService';
 
+type ScreenType = 'home' | 'weekly' | 'monthly';
+
 const AppContent: React.FC = () => {
     const { isOnline } = useNetwork();
     const { selectedLocation } = useLocation();
     const { theme, toggleTheme, isSmallScreen, screenWidth } = useTheme();
-    const prayerTimes = usePrayerTimes();
+    const { currentDayPrayerTime, allPrayerTimes } = usePrayerTimes();
     useLocationData();
     
+    const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
     const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
     const [initialCheckDone, setInitialCheckDone] = useState(false);
     const [hasCachedData, setHasCachedData] = useState(false);
+    const [showOfflineModal, setShowOfflineModal] = useState(false);
     const [previousLocation, setPreviousLocation] = useState<{
         country: string;
         city: string;
@@ -53,10 +59,11 @@ const AppContent: React.FC = () => {
                 setHasCachedData(true);
             }
 
-            // Sadece hiç veri yoksa location picker'ı aç
+            // İlk kullanıcı için location picker davranışı
             const hasLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
             if (!hasLocation && !cachedPrayerData) {
-                setIsLocationPickerOpen(true);
+                // İnternet varsa picker'ı aç, yoksa kapalı tut
+                setIsLocationPickerOpen(isOnline);
             }
 
             setInitialCheckDone(true);
@@ -65,7 +72,7 @@ const AppContent: React.FC = () => {
         if (!initialCheckDone) {
             checkInitialCache();
         }
-    }, [initialCheckDone, selectedLocation]);
+    }, [initialCheckDone, selectedLocation, isOnline]);
 
     // Konum değişikliklerini takip et - TAM seçim yapılana kadar eski konumu sakla
     useEffect(() => {
@@ -81,6 +88,12 @@ const AppContent: React.FC = () => {
             setHasCachedData(true);
         }
     }, [selectedLocation]);    const handleToggleLocationPicker = () => {
+        // İnternet yoksa modal göster
+        if (!isOnline) {
+            setShowOfflineModal(true);
+            return;
+        }
+
         const newState = !isLocationPickerOpen;
         setIsLocationPickerOpen(newState);
         
@@ -97,7 +110,42 @@ const AppContent: React.FC = () => {
         }
     };
 
+    // Callback fonksiyonları memoize et (performans için)
+    const handleBackToHome = useCallback(() => {
+        setCurrentScreen('home');
+    }, []);
+
+    const handleWeeklyPress = useCallback(() => {
+        setCurrentScreen('weekly');
+    }, []);
+
+    const handleMonthlyPress = useCallback(() => {
+        setCurrentScreen('monthly');
+    }, []);
+
+    // allPrayerTimes'ı memoize et (gereksiz yeniden render'ları önle)
+    const memoizedPrayerTimes = useMemo(() => allPrayerTimes, [allPrayerTimes]);
+
     const styles = createStyles(theme, isSmallScreen, screenWidth);
+
+    // Ekran geçişleri - memoized veriler ile
+    if (currentScreen === 'weekly' && memoizedPrayerTimes.length > 0) {
+        return (
+            <WeeklyPrayerTimes
+                prayerTimes={memoizedPrayerTimes}
+                onBack={handleBackToHome}
+            />
+        );
+    }
+
+    if (currentScreen === 'monthly' && memoizedPrayerTimes.length > 0) {
+        return (
+            <MonthlyPrayerTimes
+                prayerTimes={memoizedPrayerTimes}
+                onBack={handleBackToHome}
+            />
+        );
+    }
 
     return (
         <LinearGradient
@@ -134,14 +182,17 @@ const AppContent: React.FC = () => {
                     const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
 
                     // Eğer tam konum seçiliyse veya önceki konum varsa verileri göster
-                    if (prayerTimes && (hasFullLocation || previousLocation)) {
+                    if (currentDayPrayerTime && (hasFullLocation || previousLocation)) {
                         // Tam konum varsa onu kullan, yoksa önceki konumu göster
                         const displayLocation = hasFullLocation ? selectedLocation : previousLocation;
 
                         return (
                             <PrayerTimesDisplay
-                                prayerTimes={prayerTimes}
+                                prayerTimes={currentDayPrayerTime}
+                                allPrayerTimes={memoizedPrayerTimes}
                                 locationInfo={displayLocation!}
+                                onWeeklyPress={handleWeeklyPress}
+                                onMonthlyPress={handleMonthlyPress}
                             />
                         );
                     }
@@ -169,7 +220,6 @@ const AppContent: React.FC = () => {
                 <TouchableOpacity
                     style={styles.locationToggleButton}
                     onPress={handleToggleLocationPicker}
-                    disabled={!isOnline}
                 >
                     <Text style={styles.locationToggleText}>
                         {isLocationPickerOpen ? '▲ Konumu Gizle' : '▼ Konum Değiştir'}
@@ -177,22 +227,41 @@ const AppContent: React.FC = () => {
                 </TouchableOpacity>
 
                 {/* Location Picker - Collapsible */}
-                {isLocationPickerOpen && (
-                    isOnline ? (
-                        <LocationPicker onClose={() => {
-                            setIsLocationPickerOpen(false);
-                            setTimeout(() => {
-                                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-                            }, 100);
-                        }} />
-                    ) : (
-                        <View style={styles.offlineMessageContainer}>
-                            <Text style={styles.offlineMessageText}>
-                                Konum seçmek için internete bağlanın.
-                            </Text>
-                        </View>
-                    )
+                {isLocationPickerOpen && isOnline && (
+                    <LocationPicker onClose={() => {
+                        setIsLocationPickerOpen(false);
+                        setTimeout(() => {
+                            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+                        }, 100);
+                    }} />
                 )}
+
+                {/* Offline Warning Modal */}
+                <Modal
+                    animationType="fade"
+                    transparent={true}
+                    visible={showOfflineModal}
+                    onRequestClose={() => setShowOfflineModal(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <Text style={styles.modalIcon}>🌐</Text>
+                            <Text style={styles.modalTitle}>İnternet Bağlantısı Gerekli</Text>
+                            <Text style={styles.modalMessage}>
+                                Konum değiştirmek için internet bağlantınızın olması gerekiyor.
+                            </Text>
+                            <Text style={styles.modalSubMessage}>
+                                Daha önce konum bilgisi girdiyseniz mevcut konumunuz için namaz vakitlerini çevrimdışı olarak görüntülemeye devam edebilirsiniz.
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.modalButton}
+                                onPress={() => setShowOfflineModal(false)}
+                            >
+                                <Text style={styles.modalButtonText}>Tamam</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
             </ScrollView>
         </LinearGradient>
     );
@@ -324,6 +393,72 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
         offlineMessageText: {
             color: theme.colors.text,
             fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
+            textAlign: 'center',
+        },
+        modalOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+        },
+        modalContent: {
+            backgroundColor: theme.colors.cardBackground,
+            borderRadius: 20,
+            padding: isSmallScreen ? 25 : 30,
+            width: '90%',
+            maxWidth: 400,
+            alignItems: 'center',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 10,
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+        },
+        modalIcon: {
+            fontSize: isSmallScreen ? 48 : 56,
+            marginBottom: 15,
+        },
+        modalTitle: {
+            fontSize: isSmallScreen ? 18 : 20,
+            fontWeight: 'bold',
+            color: theme.colors.text,
+            marginBottom: 12,
+            textAlign: 'center',
+        },
+        modalMessage: {
+            fontSize: isSmallScreen ? 14 : 16,
+            color: theme.colors.text,
+            textAlign: 'center',
+            marginBottom: 10,
+            lineHeight: 22,
+        },
+        modalSubMessage: {
+            fontSize: isSmallScreen ? 12 : 14,
+            color: theme.colors.secondaryText,
+            textAlign: 'center',
+            marginBottom: 20,
+            lineHeight: 20,
+        },
+        modalButton: {
+            backgroundColor: theme.colors.buttonBackground,
+            paddingVertical: 12,
+            paddingHorizontal: 40,
+            borderRadius: 25,
+            marginTop: 10,
+            minWidth: 120,
+            shadowColor: theme.colors.shadow,
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.2,
+            shadowRadius: 3,
+            elevation: 3,
+        },
+        modalButtonText: {
+            color: theme.colors.buttonText,
+            fontSize: isSmallScreen ? 14 : 16,
+            fontWeight: 'bold',
             textAlign: 'center',
         },
     });

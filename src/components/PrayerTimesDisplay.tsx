@@ -11,7 +11,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { PrayerTime } from '../types/types';
 import NextPrayerTime from './NextPrayerTime';
@@ -19,16 +19,25 @@ import { useTheme } from '../contexts/ThemeContext';
 
 interface PrayerTimesDisplayProps {
     prayerTimes: PrayerTime;
+    allPrayerTimes?: PrayerTime[];
     locationInfo: {
         country: string;
         city: string;
         region: string;
     };
+    onWeeklyPress?: () => void;
+    onMonthlyPress?: () => void;
 }
 
 type PrayerKey = keyof Omit<PrayerTime, 'date'>;
 
-const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({ prayerTimes, locationInfo }) => {
+const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({ 
+    prayerTimes,
+    allPrayerTimes = [],
+    locationInfo, 
+    onWeeklyPress,
+    onMonthlyPress 
+}) => {
     const { theme, isSmallScreen, screenWidth } = useTheme();
     const [currentTime, setCurrentTime] = useState('');
 
@@ -159,9 +168,26 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({ prayerTimes, lo
                 {/* Hicri Tarih */}
                 <Text style={styles.hijriLabel}>Hicri:</Text>
                 <Text style={styles.hijriDate}>{hijriDate}</Text>
+
+                {/* Haftalık ve Aylık Butonlar */}
+                <View style={styles.buttonsContainer}>
+                    <TouchableOpacity 
+                        style={styles.viewButton}
+                        onPress={onWeeklyPress}
+                    >
+                        <Text style={styles.buttonText}>📅 Haftalık</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                        style={styles.viewButton}
+                        onPress={onMonthlyPress}
+                    >
+                        <Text style={styles.buttonText}>📆 Aylık</Text>
+                    </TouchableOpacity>
+                </View>
             </LinearGradient>
 
-            <NextPrayerTime prayerTimes={prayerTimes} />
+            <NextPrayerTime prayerTimes={prayerTimes} allPrayerTimes={allPrayerTimes} />
 
             <View style={styles.prayerTimesGrid}>
                 {Object.entries(prayerNames).map(([key, name]) => {
@@ -257,6 +283,31 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
             fontWeight: '600',
             color: theme.colors.activeText,
             opacity: 0.95,
+        },
+        buttonsContainer: {
+            flexDirection: 'row',
+            marginTop: 15,
+            gap: 10,
+            width: '100%',
+            justifyContent: 'center',
+        },
+        viewButton: {
+            backgroundColor: 'rgba(255, 255, 255, 0.25)',
+            paddingVertical: isSmallScreen ? 8 : 10,
+            paddingHorizontal: isSmallScreen ? 15 : 20,
+            borderRadius: 20,
+            borderWidth: 1,
+            borderColor: 'rgba(255, 255, 255, 0.4)',
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.15,
+            shadowRadius: 3,
+            elevation: 3,
+        },
+        buttonText: {
+            color: theme.colors.activeText,
+            fontSize: isSmallScreen ? 12 : 13,
+            fontWeight: 'bold',
         },
         prayerTimesGrid: {
             flexDirection: 'row',

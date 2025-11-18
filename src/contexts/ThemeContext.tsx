@@ -6,6 +6,7 @@
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
 import { Dimensions } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type ThemeType = 'light' | 'dark';
 
@@ -96,6 +97,21 @@ export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children 
     const [themeType, setThemeType] = useState<ThemeType>('light');
     const [dimensions, setDimensions] = useState(Dimensions.get('window'));
 
+    // Tema tercihini yükle
+    useEffect(() => {
+        const loadThemePreference = async () => {
+            try {
+                const savedTheme = await AsyncStorage.getItem('themePreference');
+                if (savedTheme === 'light' || savedTheme === 'dark') {
+                    setThemeType(savedTheme);
+                }
+            } catch (error) {
+                console.error('Error loading theme preference:', error);
+            }
+        };
+        loadThemePreference();
+    }, []);
+
     useEffect(() => {
         const subscription = Dimensions.addEventListener('change', ({ window }) => {
             setDimensions(window);
@@ -104,8 +120,14 @@ export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children 
         return () => subscription?.remove();
     }, []);
 
-    const toggleTheme = () => {
-        setThemeType(prev => prev === 'light' ? 'dark' : 'light');
+    const toggleTheme = async () => {
+        const newTheme = themeType === 'light' ? 'dark' : 'light';
+        setThemeType(newTheme);
+        try {
+            await AsyncStorage.setItem('themePreference', newTheme);
+        } catch (error) {
+            console.error('Error saving theme preference:', error);
+        }
     };
 
     const theme = themeType === 'light' ? lightTheme : darkTheme;

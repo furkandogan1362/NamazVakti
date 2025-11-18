@@ -15,6 +15,7 @@ import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
 
 interface PrayerTimes {
+    date: string;
     fajr: string;
     sun: string;
     dhuhr: string;
@@ -25,9 +26,10 @@ interface PrayerTimes {
 
 interface Props {
     prayerTimes: PrayerTimes | null;
+    allPrayerTimes?: PrayerTimes[];
 }
 
-const NextPrayerTime: React.FC<Props> = ({ prayerTimes }) => {
+const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) => {
     const [timeUntilNextPrayer, setTimeUntilNextPrayer] = useState<string>('');
     const [nextPrayer, setNextPrayer] = useState<string>('');
     const { theme, isSmallScreen, screenWidth } = useTheme();
@@ -50,7 +52,16 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes }) => {
             let nextPrayerTime: Date | null = null;
             let nextPrayerName: string = '';
 
-            // Find the next prayer time
+            // Bugünkün tarihini al (Türkiye saati)
+            const utcTime = now.getTime();
+            const turkeyOffset = 3 * 60 * 60 * 1000;
+            const turkeyTime = new Date(utcTime + turkeyOffset);
+            const year = turkeyTime.getUTCFullYear();
+            const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
+            const todayStr = `${year}-${month}-${day}`;
+
+            // Find the next prayer time in today's prayers
             for (const prayerName of prayerNames) {
                 const timeString = prayerTimes[prayerName as keyof PrayerTimes];
                 if (timeString) {
@@ -65,14 +76,33 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes }) => {
                 }
             }
 
-            // If no next prayer found (after Isha), set next prayer to tomorrow's Fajr
-            if (!nextPrayerTime) {
-                const fajrTime = new Date();
-                const [fajrHours, fajrMinutes] = prayerTimes.fajr.split(':').map(Number);
-                fajrTime.setDate(fajrTime.getDate() + 1); // Set to tomorrow
-                fajrTime.setHours(fajrHours, fajrMinutes, 0, 0);
-                nextPrayerTime = fajrTime;
-                nextPrayerName = 'Fajr';
+            // Yatsı geçti ama saat henüz 00:00 olmadı - yarının imsak vaktini göster
+            if (!nextPrayerTime && allPrayerTimes.length > 0) {
+                // Yarının tarihini hesapla
+                const tomorrow = new Date(todayStr);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+                // Yarının verilerini bul
+                const tomorrowPrayer = allPrayerTimes.find(pt => pt.date.split('T')[0] === tomorrowStr);
+                
+                if (tomorrowPrayer) {
+                    // Yarının imsak vaktini kullan
+                    const fajrTime = new Date();
+                    const [fajrHours, fajrMinutes] = tomorrowPrayer.fajr.split(':').map(Number);
+                    fajrTime.setDate(fajrTime.getDate() + 1);
+                    fajrTime.setHours(fajrHours, fajrMinutes, 0, 0);
+                    nextPrayerTime = fajrTime;
+                    nextPrayerName = 'Fajr';
+                } else {
+                    // Fallback: Bugünün imsak vaktini yarın için kullan
+                    const fajrTime = new Date();
+                    const [fajrHours, fajrMinutes] = prayerTimes.fajr.split(':').map(Number);
+                    fajrTime.setDate(fajrTime.getDate() + 1);
+                    fajrTime.setHours(fajrHours, fajrMinutes, 0, 0);
+                    nextPrayerTime = fajrTime;
+                    nextPrayerName = 'Fajr';
+                }
             }
 
             // Calculate the time difference
@@ -94,7 +124,7 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes }) => {
         const interval = setInterval(calculateTimeUntilNextPrayer, 1000);
 
         return () => clearInterval(interval); // Cleanup on unmount
-    }, [prayerTimes]);
+    }, [prayerTimes, allPrayerTimes]);
 
     const styles = createStyles(theme, isSmallScreen, screenWidth);
     const turkishPrayerName = prayerNamesturkish[nextPrayer] || nextPrayer;

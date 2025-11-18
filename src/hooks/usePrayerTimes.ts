@@ -46,24 +46,11 @@ export const usePrayerTimes = () => {
         const today = `${year}-${month}-${day}`;
 
         if (allPrayerTimes.length > 0) {
+            // Bugünün verilerini bul ve göster
             const currentDay = allPrayerTimes.find(pt => pt.date.split('T')[0] === today);
 
             if (currentDay) {
-                const ishaTime = new Date(today + 'T' + currentDay.isha);
-                
-                // Yarının tarihini hesapla (ay ve yıl geçişlerinde de çalışır)
-                const todayDate = new Date(today);
-                const tomorrow = new Date(todayDate);
-                tomorrow.setDate(tomorrow.getDate() + 1);
-                const tomorrowStr = tomorrow.toISOString().split('T')[0];
-                
-                const nextDay = allPrayerTimes.find(pt => pt.date.split('T')[0] === tomorrowStr);
-
-                if (now > ishaTime && nextDay) {
-                    setCurrentDayPrayerTime(nextDay);
-                } else {
-                    setCurrentDayPrayerTime(currentDay);
-                }
+                setCurrentDayPrayerTime(currentDay);
             }
         }
     }, [allPrayerTimes]);
@@ -78,10 +65,10 @@ export const usePrayerTimes = () => {
                 // Konum değişti mi kontrol et
                 const locationChanged = lastLocationId !== null && lastLocationId !== selectedRegionObject.id;
                 
-                // Cache süresi kontrolü: Son veri çekme tarihinden 24 saat geçmişse API'den çek
+                // Cache süresi kontrolü: Son veri çekme tarihinden 15 gün geçmişse API'den çek
                 const now = new Date();
                 const cacheExpired = !lastFetchDate ||
-                    (now.getTime() - lastFetchDate.getTime()) > 24 * 60 * 60 * 1000; // 24 saat
+                    (now.getTime() - lastFetchDate.getTime()) > 15 * 24 * 60 * 60 * 1000; // 15 gün
 
                 // Konum değiştiyse veya cache süresi dolmuşsa API'den çek
                 const shouldFetch = locationChanged || cacheExpired;
@@ -144,5 +131,5 @@ export const usePrayerTimes = () => {
         return () => clearInterval(interval);
     }, [allPrayerTimes, updateCurrentDayPrayerTime, lastFetchDate]);
 
-    return currentDayPrayerTime;
+    return { currentDayPrayerTime, allPrayerTimes };
 };

@@ -153,3 +153,39 @@ export const clearStoredData = async (): Promise<void> => {
         console.error('Error clearing stored data:', error);
     }
 };
+
+// Haftalık liste son gösterim tarihi
+export const saveWeeklyLastShownDate = async (date: string): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('weeklyLastShownDate', date);
+    } catch (error) {
+        console.error('Error saving weekly last shown date:', error);
+    }
+};
+
+export const loadWeeklyLastShownDate = async (): Promise<string | null> => {
+    try {
+        return await AsyncStorage.getItem('weeklyLastShownDate');
+    } catch (error) {
+        console.error('Error loading weekly last shown date:', error);
+        return null;
+    }
+};
+
+// Aylık liste son gösterim tarihi
+export const saveMonthlyLastShownDate = async (date: string): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('monthlyLastShownDate', date);
+    } catch (error) {
+        console.error('Error saving monthly last shown date:', error);
+    }
+};
+
+export const loadMonthlyLastShownDate = async (): Promise<string | null> => {
+    try {
+        return await AsyncStorage.getItem('monthlyLastShownDate');
+    } catch (error) {
+        console.error('Error loading monthly last shown date:', error);
+        return null;
+    }
+};
