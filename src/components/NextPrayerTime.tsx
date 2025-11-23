@@ -11,8 +11,9 @@
 
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from '../contexts/ThemeContext';
+import AnimatedCard from './ui/AnimatedCard';
+import CircularProgress from './ui/CircularProgress';
 
 interface PrayerTimes {
     date: string;
@@ -32,6 +33,7 @@ interface Props {
 const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) => {
     const [timeUntilNextPrayer, setTimeUntilNextPrayer] = useState<string>('');
     const [nextPrayer, setNextPrayer] = useState<string>('');
+    const [progress, setProgress] = useState(0);
     const { theme, isSmallScreen, screenWidth } = useTheme();
 
     const prayerNamesturkish: Record<string, string> = {
@@ -43,34 +45,51 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
         Isha: 'Yatsı',
     };
 
+    const getCountdownLabel = (): string => {
+        return 'Vaktinin Çıkmasına';
+    };
+
     useEffect(() => {
-        if (!prayerTimes) {return;}
+        if (!prayerTimes) { return; }
 
         const calculateTimeUntilNextPrayer = () => {
             const now = new Date();
+            // Use device local time instead of forced Turkey time
+            // This ensures the countdown is correct relative to the user's device time
+
             const prayerNames = ['fajr', 'sun', 'dhuhr', 'asr', 'maghrib', 'isha'];
             let nextPrayerTime: Date | null = null;
             let nextPrayerName: string = '';
-
-            // Bugünkün tarihini al (Türkiye saati)
-            const utcTime = now.getTime();
-            const turkeyOffset = 3 * 60 * 60 * 1000;
-            const turkeyTime = new Date(utcTime + turkeyOffset);
-            const year = turkeyTime.getUTCFullYear();
-            const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
-            const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
-            const todayStr = `${year}-${month}-${day}`;
+            let prevPrayerTime: Date | null = null;
 
             // Find the next prayer time in today's prayers
-            for (const prayerName of prayerNames) {
+            for (let i = 0; i < prayerNames.length; i++) {
+                const prayerName = prayerNames[i];
                 const timeString = prayerTimes[prayerName as keyof PrayerTimes];
                 if (timeString) {
                     const prayerTime = new Date();
                     const [hours, minutes] = timeString.split(':').map(Number);
                     prayerTime.setHours(hours, minutes, 0, 0);
+
                     if (prayerTime > now) {
                         nextPrayerTime = prayerTime;
                         nextPrayerName = prayerName.charAt(0).toUpperCase() + prayerName.slice(1);
+
+                        // Previous prayer time
+                        if (i > 0) {
+                            const prevName = prayerNames[i - 1];
+                            const prevTimeString = prayerTimes[prevName as keyof PrayerTimes];
+                            const [prevH, prevM] = prevTimeString.split(':').map(Number);
+                            const prevDate = new Date();
+                            prevDate.setHours(prevH, prevM, 0, 0);
+                            prevPrayerTime = prevDate;
+                        } else {
+                            // If next is Fajr (today), previous was Isha (yesterday)
+                            // We need to handle this carefully, but for now let's approximate
+                            const startOfDay = new Date();
+                            startOfDay.setHours(0, 0, 0, 0);
+                            prevPrayerTime = startOfDay;
+                        }
                         break;
                     }
                 }
@@ -79,13 +98,13 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
             // Yatsı geçti ama saat henüz 00:00 olmadı - yarının imsak vaktini göster
             if (!nextPrayerTime && allPrayerTimes.length > 0) {
                 // Yarının tarihini hesapla
-                const tomorrow = new Date(todayStr);
+                const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
                 const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
                 // Yarının verilerini bul
                 const tomorrowPrayer = allPrayerTimes.find(pt => pt.date.split('T')[0] === tomorrowStr);
-                
+
                 if (tomorrowPrayer) {
                     // Yarının imsak vaktini kullan
                     const fajrTime = new Date();
@@ -94,14 +113,22 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
                     fajrTime.setHours(fajrHours, fajrMinutes, 0, 0);
                     nextPrayerTime = fajrTime;
                     nextPrayerName = 'Fajr';
+
+                    // Previous prayer was today's Isha
+                    const ishaTime = new Date();
+                    const [ishaHours, ishaMinutes] = prayerTimes.isha.split(':').map(Number);
+                    ishaTime.setHours(ishaHours, ishaMinutes, 0, 0);
+                    prevPrayerTime = ishaTime;
+
                 } else {
-                    // Fallback: Bugünün imsak vaktini yarın için kullan
+                    // Fallback
                     const fajrTime = new Date();
                     const [fajrHours, fajrMinutes] = prayerTimes.fajr.split(':').map(Number);
                     fajrTime.setDate(fajrTime.getDate() + 1);
                     fajrTime.setHours(fajrHours, fajrMinutes, 0, 0);
                     nextPrayerTime = fajrTime;
                     nextPrayerName = 'Fajr';
+                    prevPrayerTime = new Date(); // Fallback
                 }
             }
 
@@ -114,6 +141,14 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
 
                 setTimeUntilNextPrayer(`${hours.toString().padStart(2, '0')} : ${minutes.toString().padStart(2, '0')} : ${seconds.toString().padStart(2, '0')}`);
                 setNextPrayer(nextPrayerName);
+
+                // Calculate progress
+                if (prevPrayerTime) {
+                    const totalDuration = nextPrayerTime.getTime() - prevPrayerTime.getTime();
+                    const elapsed = now.getTime() - prevPrayerTime.getTime();
+                    const p = Math.min(Math.max(elapsed / totalDuration, 0), 1);
+                    setProgress(p);
+                }
             }
         };
 
@@ -128,61 +163,105 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
 
     const styles = createStyles(theme, isSmallScreen, screenWidth);
     const turkishPrayerName = prayerNamesturkish[nextPrayer] || nextPrayer;
+    // Responsive circle size calculation
+    const circleSize = Math.min(screenWidth * 0.65, isSmallScreen ? 220 : 280);
+    const countdownLabel = getCountdownLabel();
+
+    // Determine current prayer name based on next prayer
+    const getCurrentPrayerName = (next: string): string => {
+        switch (next) {
+            case 'Fajr': return 'Yatsı';
+            case 'Sun': return 'İmsak';
+            case 'Dhuhr': return 'Güneş'; // Or Kerahat? Usually we say Güneş/Kerahat but let's stick to prayer names. After Sun is Dhuhr.
+            case 'Asr': return 'Öğle';
+            case 'Maghrib': return 'İkindi';
+            case 'Isha': return 'Akşam';
+            default: return '';
+        }
+    };
+    const currentPrayerName = getCurrentPrayerName(nextPrayer);
 
     return (
-        <LinearGradient
-            colors={theme.colors.activeCard}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.container}
-        >
-            {nextPrayer && (
-                <View style={styles.content}>
-                    <Text style={styles.label}>Sonraki Vakit</Text>
-                    <Text style={styles.prayerName}>{turkishPrayerName}</Text>
-                    <Text style={styles.timeText}>{timeUntilNextPrayer}</Text>
-                </View>
-            )}
-        </LinearGradient>
+        <AnimatedCard style={styles.container} delay={100}>
+            <View style={styles.content}>
+                <CircularProgress
+                    size={circleSize}
+                    strokeWidth={15}
+                    progress={progress}
+                    color={theme.colors.accent}
+                    backgroundColor={theme.colors.cardBorder}
+                >
+                    <View style={styles.innerContent}>
+                        <Text style={styles.currentPrayerName}>{currentPrayerName}</Text>
+                        <Text style={styles.label}>{countdownLabel}</Text>
+                        <Text style={styles.timeText}>{timeUntilNextPrayer}</Text>
+                        <View style={styles.nextPrayerContainer}>
+                            <Text style={styles.nextLabel}>Sonraki Vakit</Text>
+                            <Text style={styles.prayerName}>{turkishPrayerName}</Text>
+                        </View>
+                    </View>
+                </CircularProgress>
+            </View>
+        </AnimatedCard>
     );
 };
 
-const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) => {
-    const padding = isSmallScreen ? 20 : screenWidth < 768 ? 25 : 30;
-    const labelSize = isSmallScreen ? 16 : screenWidth < 768 ? 17 : 18;
-    const prayerSize = isSmallScreen ? 22 : screenWidth < 768 ? 24 : 26;
-    const timeSize = isSmallScreen ? 28 : screenWidth < 768 ? 32 : 36;
-
+const createStyles = (theme: any, isSmallScreen: boolean, _screenWidth: number) => {
     return StyleSheet.create({
         container: {
-            padding: padding,
-            borderRadius: 12,
-            shadowColor: theme.colors.shadow,
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.2,
-            shadowRadius: 4,
-            elevation: 5,
+            marginBottom: 10,
+            borderRadius: 20,
+            overflow: 'hidden',
         },
         content: {
             alignItems: 'center',
+            justifyContent: 'center',
+            padding: 10,
+        },
+        innerContent: {
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        currentPrayerName: {
+            fontSize: isSmallScreen ? 20 : 24,
+            fontWeight: 'bold',
+            color: theme.colors.accent,
+            marginBottom: 4,
+            textAlign: 'center',
         },
         label: {
-            fontSize: labelSize,
-            fontWeight: '600',
-            color: theme.colors.activeText,
-            opacity: 0.9,
-            marginBottom: 5,
+            fontSize: isSmallScreen ? 12 : 14,
+            fontWeight: '500',
+            color: theme.colors.secondaryText,
+            marginBottom: 2,
+            letterSpacing: 0.5,
+            textAlign: 'center',
         },
         prayerName: {
-            fontSize: prayerSize,
+            fontSize: isSmallScreen ? 20 : 24,
             fontWeight: 'bold',
-            color: theme.colors.activeText,
-            marginBottom: 8,
+            color: theme.colors.accent,
+            textAlign: 'center',
+        },
+        nextLabel: {
+            fontSize: isSmallScreen ? 12 : 14,
+            color: theme.colors.secondaryText,
+            textAlign: 'center',
+            marginBottom: 2,
+        },
+        nextPrayerContainer: {
+            flexDirection: 'column',
+            alignItems: 'center',
+            marginTop: 8,
+            justifyContent: 'center',
         },
         timeText: {
-            fontSize: timeSize,
-            fontWeight: '600',
-            color: theme.colors.activeText,
+            fontSize: isSmallScreen ? 32 : 40,
+            fontWeight: 'bold',
+            color: theme.colors.text,
+            fontVariant: ['tabular-nums'],
+            marginVertical: 4,
+            textAlign: 'center',
         },
     });
 };

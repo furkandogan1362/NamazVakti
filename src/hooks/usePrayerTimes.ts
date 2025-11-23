@@ -56,6 +56,15 @@ export const usePrayerTimes = () => {
     }, [allPrayerTimes]);
 
     const fetchPrayerTimes = useCallback(async () => {
+        // İnternet yoksa direkt cache'den yükle, bölge kontrolüne gerek yok
+        if (!isOnline) {
+            const cachedTimes = await loadPrayerTimes();
+            if (cachedTimes && cachedTimes.length > 0) {
+                setAllPrayerTimes(cachedTimes);
+            }
+            return;
+        }
+
         const { country, city, region } = selectedLocation;
         
         if (country && city && region && regions.length) {
@@ -70,10 +79,21 @@ export const usePrayerTimes = () => {
                 const cacheExpired = !lastFetchDate ||
                     (now.getTime() - lastFetchDate.getTime()) > 15 * 24 * 60 * 60 * 1000; // 15 gün
 
-                // Konum değiştiyse veya cache süresi dolmuşsa API'den çek
-                const shouldFetch = locationChanged || cacheExpired;
+                // Bugünün verisi var mı kontrol et
+                const utcTime = now.getTime();
+                const turkeyOffset = 3 * 60 * 60 * 1000;
+                const turkeyTime = new Date(utcTime + turkeyOffset);
+                const year = turkeyTime.getUTCFullYear();
+                const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
+                const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
+                const today = `${year}-${month}-${day}`;
+                
+                const hasDataForToday = allPrayerTimes.some(pt => pt.date.split('T')[0] === today);
 
-                if (isOnline && shouldFetch) {
+                // Konum değiştiyse, cache süresi dolmuşsa veya bugünün verisi yoksa API'den çek
+                const shouldFetch = locationChanged || cacheExpired || !hasDataForToday;
+
+                if (shouldFetch) {
                     try {
                         const data = await fetchPrayerTimesByLocationId(selectedRegionObject.id);
                         setAllPrayerTimes(data);
@@ -91,19 +111,13 @@ export const usePrayerTimes = () => {
                             setAllPrayerTimes(cachedTimes);
                         }
                     }
-                } else if (!isOnline) {
-                    // İnternet yoksa cache'den yükle
-                    const cachedTimes = await loadPrayerTimes();
-                    if (cachedTimes && cachedTimes.length > 0) {
-                        setAllPrayerTimes(cachedTimes);
-                    }
                 } else if (!locationChanged && !cacheExpired) {
                     // Konum değişmedi ve cache geçerli, mevcut veriyi kullan
                     setLastLocationId(selectedRegionObject.id);
                 }
             }
         }
-    }, [selectedLocation, regions, isOnline, lastFetchDate, lastLocationId]);
+    }, [selectedLocation, regions, isOnline, lastFetchDate, lastLocationId, allPrayerTimes]);
 
     useEffect(() => {
         const initializePrayerTimes = async () => {

@@ -1,8 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useLocation } from '../contexts/LocationContext';
 import { useTheme } from '../contexts/ThemeContext';
+import { fetchCountries } from '../api/apiService';
 
 interface LocationPickerProps {
     onClose: () => void;
@@ -15,8 +16,31 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
         regions,
         selectedLocation,
         setSelectedLocation,
+        setCountries,
     } = useLocation();
     const { theme, isSmallScreen, screenWidth } = useTheme();
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        if (countries.length === 0) {
+            loadCountries();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const loadCountries = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            const data = await fetchCountries();
+            setCountries(data);
+        } catch (err) {
+            setError('Veriler yüklenirken bir hata oluştu.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     const handleConfirmLocation = () => {
         if (selectedLocation.country && selectedLocation.city && selectedLocation.region) {
@@ -26,119 +50,201 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
 
     const styles = createStyles(theme, isSmallScreen, screenWidth);
 
+    if (loading) {
+        return (
+            <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={theme.colors.accent} />
+                <Text style={styles.loadingText}>Veriler yükleniyor...</Text>
+            </View>
+        );
+    }
+
+    if (error) {
+        return (
+            <View style={styles.loadingContainer}>
+                <Text style={styles.errorText}>{error}</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={loadCountries}>
+                    <Text style={styles.retryButtonText}>Tekrar Dene</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
+    if (countries.length === 0) {
+        return (
+            <View style={styles.loadingContainer}>
+                <Text style={styles.loadingText}>Veri bulunamadı.</Text>
+                <TouchableOpacity style={styles.retryButton} onPress={loadCountries}>
+                    <Text style={styles.retryButtonText}>Yenile</Text>
+                </TouchableOpacity>
+            </View>
+        );
+    }
+
     return (
         <View style={styles.container}>
-            <Text style={styles.label}>Select Country:</Text>
-            <Picker
-                selectedValue={selectedLocation.country}
-                onValueChange={(country: string) =>
-                    setSelectedLocation({...selectedLocation, country, city: '', region: ''})}
-                style={styles.picker}
-            >
-                <Picker.Item label="Choose a country" value="" />
-                {countries.map((country) => (
-                    <Picker.Item key={country} label={country} value={country} />
-                ))}
-            </Picker>
+            <View style={styles.pickerContainer}>
+                <Text style={styles.label}>Ülke</Text>
+                <View style={styles.pickerWrapper}>
+                    <Picker
+                        selectedValue={selectedLocation.country}
+                        onValueChange={(country: string) =>
+                            setSelectedLocation({...selectedLocation, country, city: '', region: ''})}
+                        style={styles.picker}
+                        dropdownIconColor={theme.colors.text}
+                    >
+                        <Picker.Item label="Ülke Seçiniz" value="" />
+                        {countries.map((country) => (
+                            <Picker.Item key={country} label={country} value={country} />
+                        ))}
+                    </Picker>
+                </View>
+            </View>
 
-            <Text style={styles.label}>Select City:</Text>
-            <Picker
-                selectedValue={selectedLocation.city}
-                onValueChange={(city: string) =>
-                    setSelectedLocation({...selectedLocation, city, region: ''})}
-                style={styles.picker}
-                enabled={!!selectedLocation.country}
-            >
-                <Picker.Item label="Choose a city" value="" />
-                {cities.map((city) => (
-                    <Picker.Item key={city} label={city} value={city} />
-                ))}
-            </Picker>
+            <View style={styles.pickerContainer}>
+                <Text style={styles.label}>Şehir</Text>
+                <View style={[styles.pickerWrapper, !selectedLocation.country && styles.disabledPicker]}>
+                    <Picker
+                        selectedValue={selectedLocation.city}
+                        onValueChange={(city: string) =>
+                            setSelectedLocation({...selectedLocation, city, region: ''})}
+                        style={styles.picker}
+                        enabled={!!selectedLocation.country}
+                        dropdownIconColor={theme.colors.text}
+                    >
+                        <Picker.Item label="Şehir Seçiniz" value="" />
+                        {cities.map((city) => (
+                            <Picker.Item key={city} label={city} value={city} />
+                        ))}
+                    </Picker>
+                </View>
+            </View>
 
-            <Text style={styles.label}>Select Region:</Text>
-            <Picker
-                selectedValue={selectedLocation.region}
-                onValueChange={(region: string) =>
-                    setSelectedLocation({...selectedLocation, region})}
-                style={styles.picker}
-                enabled={!!selectedLocation.city}
-            >
-                <Picker.Item label="Choose a region" value="" />
-                {regions.map((region) => {
-                    // Region adı boş veya null ise city adını göster
-                    const displayName = region.region || selectedLocation.city;
-                    return (
-                        <Picker.Item 
-                            key={region.id} 
-                            label={displayName} 
-                            value={displayName} 
-                        />
-                    );
-                })}
-            </Picker>
+            <View style={styles.pickerContainer}>
+                <Text style={styles.label}>İlçe</Text>
+                <View style={[styles.pickerWrapper, !selectedLocation.city && styles.disabledPicker]}>
+                    <Picker
+                        selectedValue={selectedLocation.region}
+                        onValueChange={(region: string) =>
+                            setSelectedLocation({...selectedLocation, region})}
+                        style={styles.picker}
+                        enabled={!!selectedLocation.city}
+                        dropdownIconColor={theme.colors.text}
+                    >
+                        <Picker.Item label="İlçe Seçiniz" value="" />
+                        {regions.map((region) => {
+                            const displayName = region.region || selectedLocation.city;
+                            return (
+                                <Picker.Item
+                                    key={region.id}
+                                    label={displayName}
+                                    value={displayName}
+                                />
+                            );
+                        })}
+                    </Picker>
+                </View>
+            </View>
 
             {selectedLocation.country && selectedLocation.city && selectedLocation.region && (
                 <TouchableOpacity
                     style={styles.confirmButton}
                     onPress={handleConfirmLocation}
                 >
-                    <Text style={styles.confirmButtonText}>✓ Konumu Onayla</Text>
+                    <View style={styles.confirmButtonInner}>
+                        <Text style={styles.confirmButtonText}>✓ Konumu Onayla</Text>
+                    </View>
                 </TouchableOpacity>
             )}
         </View>
     );
 };
 
-const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) => {
-    const padding = isSmallScreen ? 10 : screenWidth < 768 ? 15 : 20;
-    const fontSize = isSmallScreen ? 14 : screenWidth < 768 ? 16 : 18;
-
+const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number) => {
     return StyleSheet.create({
         container: {
             width: '100%',
-            backgroundColor: theme.colors.cardBackground,
-            borderRadius: 12,
-            padding: padding,
-            borderWidth: 1,
-            borderColor: theme.colors.cardBorder,
-            shadowColor: theme.colors.shadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 3,
+        },
+        pickerContainer: {
+            marginBottom: 15,
         },
         label: {
-            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
-            fontWeight: 'bold',
-            marginTop: 10,
+            fontSize: 14,
+            fontWeight: '600',
             marginBottom: 8,
-            color: theme.colors.text,
+            color: theme.colors.secondaryText,
+            marginLeft: 4,
+        },
+        pickerWrapper: {
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+            backgroundColor: theme.type === 'light' ? '#F0F0F0' : 'rgba(255,255,255,0.1)',
+            overflow: 'hidden',
+        },
+        disabledPicker: {
+            opacity: 0.5,
+            backgroundColor: theme.type === 'light' ? '#E0E0E0' : 'rgba(0,0,0,0.05)',
         },
         picker: {
             width: '100%',
-            height: isSmallScreen ? 45 : 50,
-            backgroundColor: theme.colors.pickerBackground,
-            borderRadius: 8,
-            marginBottom: 10,
-            borderWidth: 1,
-            borderColor: theme.colors.pickerBorder,
+            height: 50,
             color: theme.colors.text,
+            backgroundColor: 'transparent',
         },
         confirmButton: {
-            marginTop: 20,
-            backgroundColor: '#4CAF50',
-            padding: 15,
-            borderRadius: 10,
+            marginTop: 10,
+            height: 50,
+            borderRadius: 25,
+            overflow: 'hidden',
+            backgroundColor: theme.colors.buttonBackground || theme.colors.card,
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+        },
+        confirmButtonInner: {
+            flex: 1,
+            justifyContent: 'center',
             alignItems: 'center',
-            shadowColor: theme.colors.shadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 3,
-            elevation: 4,
+            backgroundColor: theme.type === 'light' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.2)',
         },
         confirmButtonText: {
-            color: '#FFFFFF',
-            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
+            color: theme.colors.text,
+            fontSize: 16,
+            fontWeight: 'bold',
+        },
+        loadingContainer: {
+            padding: 20,
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        loadingText: {
+            fontSize: 16,
+            fontWeight: 'bold',
+            color: theme.colors.text,
+            marginBottom: 8,
+        },
+        loadingSubText: {
+            fontSize: 14,
+            color: theme.colors.secondaryText,
+            textAlign: 'center',
+        },
+        errorText: {
+            fontSize: 14,
+            color: 'red',
+            marginBottom: 10,
+        },
+        retryButton: {
+            marginTop: 10,
+            paddingVertical: 10,
+            paddingHorizontal: 20,
+            borderRadius: 25,
+            backgroundColor: theme.colors.buttonBackground,
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+        },
+        retryButtonText: {
+            color: theme.colors.text,
+            fontSize: 16,
             fontWeight: 'bold',
         },
     });

@@ -5,8 +5,14 @@
  */
 
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { Dimensions } from 'react-native';
+import { Dimensions, useColorScheme, LayoutAnimation, Platform, UIManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { COLORS } from '../constants/theme';
+
+// Android için LayoutAnimation'ı aktifleştir
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export type ThemeType = 'light' | 'dark';
 
@@ -26,6 +32,12 @@ interface Theme {
         pickerBorder: string;
         headerText: string;
         shadow: string;
+        accent: string;
+        highlight: string;
+        glass: string;
+        icon: string;
+        success: string;
+        error: string;
     };
     gradientStart: { x: number; y: number };
     gradientEnd: { x: number; y: number };
@@ -34,43 +46,55 @@ interface Theme {
 const lightTheme: Theme = {
     type: 'light',
     colors: {
-        background: ['#E3F2FD', '#BBDEFB', '#90CAF9'],
-        cardBackground: '#FFFFFF',
-        cardBorder: '#E0E0E0',
-        text: '#212121',
-        secondaryText: '#757575',
-        activeCard: ['#4CAF50', '#66BB6A'],
+        background: COLORS.light.background,
+        cardBackground: COLORS.light.card,
+        cardBorder: COLORS.light.cardBorder,
+        text: COLORS.light.text,
+        secondaryText: COLORS.light.secondaryText,
+        activeCard: [COLORS.light.accent, COLORS.light.highlight],
         activeText: '#FFFFFF',
-        buttonBackground: '#2196F3',
+        buttonBackground: COLORS.light.accent,
         buttonText: '#FFFFFF',
-        pickerBackground: '#F5F5F5',
-        pickerBorder: '#E0E0E0',
-        headerText: '#1976D2',
-        shadow: '#000000',
+        pickerBackground: 'rgba(255, 255, 255, 0.5)',
+        pickerBorder: COLORS.light.cardBorder,
+        headerText: COLORS.light.text,
+        shadow: COLORS.light.shadow,
+        accent: COLORS.light.accent,
+        highlight: COLORS.light.highlight,
+        glass: COLORS.light.glass,
+        icon: COLORS.light.icon,
+        success: COLORS.light.success,
+        error: COLORS.light.error,
     },
     gradientStart: { x: 0, y: 0 },
-    gradientEnd: { x: 0, y: 1 },
+    gradientEnd: { x: 1, y: 1 },
 };
 
 const darkTheme: Theme = {
     type: 'dark',
     colors: {
-        background: ['#1A237E', '#283593', '#3F51B5'],
-        cardBackground: '#263238',
-        cardBorder: '#37474F',
-        text: '#ECEFF1',
-        secondaryText: '#B0BEC5',
-        activeCard: ['#00897B', '#26A69A'],
+        background: COLORS.dark.background,
+        cardBackground: COLORS.dark.card,
+        cardBorder: COLORS.dark.cardBorder,
+        text: COLORS.dark.text,
+        secondaryText: COLORS.dark.secondaryText,
+        activeCard: [COLORS.dark.accent, COLORS.dark.highlight],
         activeText: '#FFFFFF',
-        buttonBackground: '#0288D1',
+        buttonBackground: COLORS.dark.accent,
         buttonText: '#FFFFFF',
-        pickerBackground: '#37474F',
-        pickerBorder: '#546E7A',
-        headerText: '#64B5F6',
-        shadow: '#000000',
+        pickerBackground: 'rgba(30, 41, 59, 0.5)',
+        pickerBorder: COLORS.dark.cardBorder,
+        headerText: COLORS.dark.text,
+        shadow: COLORS.dark.shadow,
+        accent: COLORS.dark.accent,
+        highlight: COLORS.dark.highlight,
+        glass: COLORS.dark.glass,
+        icon: COLORS.dark.icon,
+        success: COLORS.dark.success,
+        error: COLORS.dark.error,
     },
     gradientStart: { x: 0, y: 0 },
-    gradientEnd: { x: 0, y: 1 },
+    gradientEnd: { x: 1, y: 1 },
 };
 
 interface ThemeContextType {
@@ -94,7 +118,8 @@ const ThemeContext = createContext<ThemeContextType>({
 });
 
 export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-    const [themeType, setThemeType] = useState<ThemeType>('light');
+    const systemScheme = useColorScheme();
+    const [themeType, setThemeType] = useState<ThemeType>('light'); // Başlangıç değeri geçici, useEffect ile güncellenecek
     const [dimensions, setDimensions] = useState(Dimensions.get('window'));
 
     // Tema tercihini yükle
@@ -104,13 +129,20 @@ export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children 
                 const savedTheme = await AsyncStorage.getItem('themePreference');
                 if (savedTheme === 'light' || savedTheme === 'dark') {
                     setThemeType(savedTheme);
+                } else {
+                    // Kayıtlı tema yoksa sistem temasını kullan
+                    const defaultTheme = systemScheme === 'dark' ? 'dark' : 'light';
+                    setThemeType(defaultTheme);
                 }
             } catch (error) {
                 console.error('Error loading theme preference:', error);
+                // Hata durumunda da sistem temasını kullanmaya çalış
+                const defaultTheme = systemScheme === 'dark' ? 'dark' : 'light';
+                setThemeType(defaultTheme);
             }
         };
         loadThemePreference();
-    }, []);
+    }, []); // Sadece mount anında çalışsın, systemScheme değişirse otomatik değişmesin (kullanıcı tercihi önemli)
 
     useEffect(() => {
         const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -121,6 +153,22 @@ export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children 
     }, []);
 
     const toggleTheme = async () => {
+        // Daha yavaş ve yumuşak bir geçiş için özel animasyon konfigürasyonu
+        LayoutAnimation.configureNext({
+            duration: 800, // Süreyi 800ms'ye çıkardık (daha yavaş)
+            create: {
+                type: LayoutAnimation.Types.easeInEaseOut,
+                property: LayoutAnimation.Properties.opacity,
+            },
+            update: {
+                type: LayoutAnimation.Types.easeInEaseOut,
+            },
+            delete: {
+                type: LayoutAnimation.Types.easeInEaseOut,
+                property: LayoutAnimation.Properties.opacity,
+            },
+        });
+        
         const newTheme = themeType === 'light' ? 'dark' : 'light';
         setThemeType(newTheme);
         try {

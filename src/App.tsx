@@ -12,9 +12,8 @@
  * - Çevrimdışı/çevrimiçi durum yönetimi
  */
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal } from 'react-native';
-import LinearGradient from 'react-native-linear-gradient';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, StatusBar } from 'react-native';
 import LocationPicker from './components/LocationPicker';
 import PrayerTimesDisplay from './components/PrayerTimesDisplay';
 import WeeklyPrayerTimes from './screens/WeeklyPrayerTimes';
@@ -25,6 +24,8 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { useLocationData } from './hooks/useLocationData';
 import { usePrayerTimes } from './hooks/usePrayerTimes';
 import * as storageService from './services/storageService';
+import GradientBackground from './components/ui/GradientBackground';
+import GlassView from './components/ui/GlassView';
 
 type ScreenType = 'home' | 'weekly' | 'monthly';
 
@@ -34,7 +35,7 @@ const AppContent: React.FC = () => {
     const { theme, toggleTheme, isSmallScreen, screenWidth } = useTheme();
     const { currentDayPrayerTime, allPrayerTimes } = usePrayerTimes();
     useLocationData();
-    
+
     const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
     const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
     const [initialCheckDone, setInitialCheckDone] = useState(false);
@@ -46,7 +47,6 @@ const AppContent: React.FC = () => {
         region: string;
     } | null>(null);
 
-    const scrollViewRef = useRef<ScrollView>(null);
 
     // İlk yüklemede cache kontrolü - render ÖNCESINDE
     useEffect(() => {
@@ -87,27 +87,24 @@ const AppContent: React.FC = () => {
             });
             setHasCachedData(true);
         }
-    }, [selectedLocation]);    const handleToggleLocationPicker = () => {
+    }, [selectedLocation]);
+
+    // İnternet bağlantısı geldiğinde offline modalı kapat ve konum seçiciyi aç
+    useEffect(() => {
+        if (isOnline && showOfflineModal) {
+            setShowOfflineModal(false);
+            setIsLocationPickerOpen(true);
+        }
+    }, [isOnline, showOfflineModal]);
+
+    const handleToggleLocationPicker = () => {
         // İnternet yoksa modal göster
         if (!isOnline) {
             setShowOfflineModal(true);
             return;
         }
 
-        const newState = !isLocationPickerOpen;
-        setIsLocationPickerOpen(newState);
-        
-        if (newState) {
-            // Lokasyon seçici açıldığında smooth bir şekilde en alta scroll et
-            setTimeout(() => {
-                scrollViewRef.current?.scrollToEnd({ animated: true });
-            }, 300);
-        } else {
-            // Kapatıldığında yukarı scroll et
-            setTimeout(() => {
-                scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-            }, 100);
-        }
+        setIsLocationPickerOpen(!isLocationPickerOpen);
     };
 
     // Callback fonksiyonları memoize et (performans için)
@@ -148,32 +145,49 @@ const AppContent: React.FC = () => {
     }
 
     return (
-        <LinearGradient
-            colors={theme.colors.background}
-            start={theme.gradientStart}
-            end={theme.gradientEnd}
-            style={styles.gradientContainer}
-        >
+        <GradientBackground style={styles.gradientContainer}>
+            <StatusBar
+                barStyle={theme.type === 'dark' ? 'light-content' : 'dark-content'}
+                backgroundColor="transparent"
+                translucent
+            />
             <ScrollView
-                ref={scrollViewRef}
+
                 contentContainerStyle={styles.container}
+                showsVerticalScrollIndicator={false}
             >
                 {/* Header with theme toggle */}
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Namaz Vakitleri</Text>
-                    <TouchableOpacity
-                        style={styles.themeToggle}
-                        onPress={toggleTheme}
-                    >
-                        <Text style={styles.themeToggleText}>
-                            {theme.type === 'light' ? '🌙' : '☀️'}
-                        </Text>
-                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Namaz Vakti</Text>
+                    <View style={styles.headerButtons}>
+                        <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={handleToggleLocationPicker}
+                        >
+                            <View style={styles.iconButtonInner}>
+                                <Text style={styles.iconButtonText}>📍</Text>
+                            </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={toggleTheme}
+                        >
+                            <View style={styles.iconButtonInner}>
+                                <Text style={styles.iconButtonText}>
+                                    {theme.type === 'light' ? '🌙' : '☀️'}
+                                </Text>
+                            </View>
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 {!isOnline && (
                     <View style={styles.offlineContainer}>
-                        <Text style={styles.offlineText}>Çevrimdışı Mod</Text>
+                        <Text style={styles.offlineIcon}>📡</Text>
+                        <View>
+                            <Text style={styles.offlineTitle}>Çevrimdışı Mod</Text>
+                            <Text style={styles.offlineSubText}>Veriler cihaz hafızasından gösteriliyor</Text>
+                        </View>
                     </View>
                 )}
 
@@ -201,13 +215,19 @@ const AppContent: React.FC = () => {
                     if (!hasCachedData && initialCheckDone) {
                         return (
                             <View style={styles.welcomeContainer}>
-                                <Text style={styles.welcomeTitle}>Hoş Geldiniz! 🕌</Text>
+                                <View style={styles.welcomeIconContainer}>
+                                    <Text style={styles.welcomeIcon}>🕌</Text>
+                                </View>
+                                <Text style={styles.welcomeTitle}>Hoş Geldiniz</Text>
                                 <Text style={styles.welcomeText}>
-                                    Namaz vakitlerini görmek için lütfen konumunuzu seçin.
+                                    Namaz vakitlerini doğru bir şekilde görüntüleyebilmek için lütfen konumunuzu belirleyin.
                                 </Text>
-                                <Text style={styles.welcomeHint}>
-                                    👇 Aşağıdaki butona tıklayarak başlayın
-                                </Text>
+                                <TouchableOpacity
+                                    style={styles.welcomeButton}
+                                    onPress={handleToggleLocationPicker}
+                                >
+                                    <Text style={styles.welcomeButtonText}>Konum Seç</Text>
+                                </TouchableOpacity>
                             </View>
                         );
                     }
@@ -216,25 +236,35 @@ const AppContent: React.FC = () => {
                     return null;
                 })()}
 
-                {/* Location Picker Toggle Button */}
-                <TouchableOpacity
-                    style={styles.locationToggleButton}
-                    onPress={handleToggleLocationPicker}
+                {/* Location Picker Modal */}
+                <Modal
+                    animationType="fade"
+                    transparent={true}
+                    visible={isLocationPickerOpen && isOnline}
+                    onRequestClose={() => setIsLocationPickerOpen(false)}
                 >
-                    <Text style={styles.locationToggleText}>
-                        {isLocationPickerOpen ? '▲ Konumu Gizle' : '▼ Konum Değiştir'}
-                    </Text>
-                </TouchableOpacity>
+                    <View style={styles.modalOverlay}>
+                        <GlassView style={styles.locationModalContent} autoHeight={true} overlayOpacity={0.95}>
+                            <View style={styles.locationModalInner}>
+                                <View style={styles.locationModalHeader}>
+                                    <Text style={styles.locationModalTitle}>Konum Değiştir</Text>
+                                    <TouchableOpacity
+                                        style={styles.closeButton}
+                                        onPress={() => setIsLocationPickerOpen(false)}
+                                    >
+                                        <Text style={styles.closeButtonText}>✕</Text>
+                                    </TouchableOpacity>
+                                </View>
 
-                {/* Location Picker - Collapsible */}
-                {isLocationPickerOpen && isOnline && (
-                    <LocationPicker onClose={() => {
-                        setIsLocationPickerOpen(false);
-                        setTimeout(() => {
-                            scrollViewRef.current?.scrollTo({ y: 0, animated: true });
-                        }, 100);
-                    }} />
-                )}
+                                <Text style={styles.locationModalMessage}>
+                                    Namaz vakitlerini doğru görüntülemek için lütfen konumunuzu seçin.
+                                </Text>
+
+                                <LocationPicker onClose={() => setIsLocationPickerOpen(false)} />
+                            </View>
+                        </GlassView>
+                    </View>
+                </Modal>
 
                 {/* Offline Warning Modal */}
                 <Modal
@@ -244,26 +274,28 @@ const AppContent: React.FC = () => {
                     onRequestClose={() => setShowOfflineModal(false)}
                 >
                     <View style={styles.modalOverlay}>
-                        <View style={styles.modalContent}>
-                            <Text style={styles.modalIcon}>🌐</Text>
-                            <Text style={styles.modalTitle}>İnternet Bağlantısı Gerekli</Text>
-                            <Text style={styles.modalMessage}>
-                                Konum değiştirmek için internet bağlantınızın olması gerekiyor.
-                            </Text>
-                            <Text style={styles.modalSubMessage}>
-                                Daha önce konum bilgisi girdiyseniz mevcut konumunuz için namaz vakitlerini çevrimdışı olarak görüntülemeye devam edebilirsiniz.
-                            </Text>
-                            <TouchableOpacity
-                                style={styles.modalButton}
-                                onPress={() => setShowOfflineModal(false)}
-                            >
-                                <Text style={styles.modalButtonText}>Tamam</Text>
-                            </TouchableOpacity>
-                        </View>
+                        <GlassView style={styles.modalContent} autoHeight={true}>
+                            <View style={styles.modalInnerContent}>
+                                <Text style={styles.modalIcon}>🌐</Text>
+                                <Text style={styles.modalTitle}>İnternet Bağlantısı Gerekli</Text>
+                                <Text style={styles.modalMessage}>
+                                    Konum değiştirmek için internet bağlantınızın olması gerekiyor.
+                                </Text>
+                                <Text style={styles.modalSubMessage}>
+                                    Daha önce konum bilgisi girdiyseniz mevcut konumunuz için namaz vakitlerini çevrimdışı olarak görüntülemeye devam edebilirsiniz.
+                                </Text>
+                                <TouchableOpacity
+                                    style={styles.modalButton}
+                                    onPress={() => setShowOfflineModal(false)}
+                                >
+                                    <Text style={styles.modalButtonText}>Tamam</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </GlassView>
                     </View>
                 </Modal>
             </ScrollView>
-        </LinearGradient>
+        </GradientBackground>
     );
 };
 
@@ -289,6 +321,7 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
         container: {
             flexGrow: 1,
             padding: padding,
+            paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 10 : 40,
             paddingBottom: 30,
         },
         header: {
@@ -296,168 +329,219 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
             justifyContent: 'space-between',
             alignItems: 'center',
             marginBottom: 20,
-            paddingVertical: 15,
+            paddingHorizontal: 5,
         },
         headerTitle: {
-            fontSize: isSmallScreen ? 22 : screenWidth < 768 ? 24 : 26,
+            fontSize: isSmallScreen ? 24 : 28,
             fontWeight: 'bold',
-            color: theme.colors.headerText,
+            color: theme.colors.text,
+            letterSpacing: 1,
         },
-        themeToggle: {
-            width: isSmallScreen ? 45 : 50,
-            height: isSmallScreen ? 45 : 50,
-            borderRadius: isSmallScreen ? 22.5 : 25,
+        headerButtons: {
+            flexDirection: 'row',
+            gap: 10,
+        },
+        iconButton: {
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            overflow: 'hidden',
+            backgroundColor: theme.colors.card,
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+        },
+        iconButtonInner: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        iconButtonText: {
+            fontSize: 20,
+            color: theme.colors.text, // Ensure icons are bright in dark mode
+        },
+        locationModalContent: {
+            borderRadius: 20,
+            width: '95%',
+            maxWidth: 500,
+            maxHeight: '80%',
+        },
+        locationModalInner: {
+            padding: 20,
+        },
+        locationModalHeader: {
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 15,
+            paddingBottom: 10,
+            borderBottomWidth: 1,
+            borderBottomColor: theme.colors.cardBorder,
+        },
+        locationModalTitle: {
+            fontSize: 20,
+            fontWeight: 'bold',
+            color: theme.colors.text,
+        },
+        locationModalMessage: {
+            fontSize: 14,
+            color: theme.colors.secondaryText,
+            marginBottom: 15,
+            textAlign: 'center',
+        },
+        closeButton: {
+            width: 30,
+            height: 30,
+            justifyContent: 'center',
+            alignItems: 'center',
+            borderRadius: 15,
+            backgroundColor: theme.colors.cardBackground,
+        },
+        closeButtonText: {
+            fontSize: 18,
+            color: theme.colors.text,
+            fontWeight: 'bold',
+        },
+        offlineContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: theme.type === 'dark' ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.1)',
+            padding: 12,
+            borderRadius: 12,
+            marginBottom: 8, // Reduced from 20 to 8 to save space
+            borderWidth: 1,
+            borderColor: 'rgba(239, 68, 68, 0.2)',
+        },
+        offlineIcon: {
+            fontSize: 24,
+            marginRight: 12,
+            color: theme.colors.text, // Ensure icon is visible
+        },
+        offlineTitle: {
+            color: theme.colors.error,
+            fontSize: 16,
+            fontWeight: 'bold',
+            marginBottom: 2,
+        },
+        offlineSubText: {
+            color: theme.colors.secondaryText,
+            fontSize: 12,
+        },
+        welcomeContainer: {
+            flex: 1,
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+            marginTop: 40,
+        },
+        welcomeIconContainer: {
+            width: 100,
+            height: 100,
+            borderRadius: 50,
             backgroundColor: theme.colors.cardBackground,
             justifyContent: 'center',
             alignItems: 'center',
+            marginBottom: 24,
             shadowColor: theme.colors.shadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.25,
-            shadowRadius: 3.84,
-            elevation: 5,
-        },
-        themeToggleText: {
-            fontSize: isSmallScreen ? 22 : 24,
-        },
-        offlineContainer: {
-            backgroundColor: '#FF6B6B',
-            padding: 10,
-            borderRadius: 8,
-            marginBottom: 15,
-            alignItems: 'center',
-        },
-        offlineText: {
-            color: '#FFFFFF',
-            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
-            fontWeight: 'bold',
-        },
-        welcomeContainer: {
-            backgroundColor: theme.colors.cardBackground,
-            padding: isSmallScreen ? 25 : 30,
-            borderRadius: 15,
-            marginBottom: 20,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.15,
+            shadowRadius: 12,
+            elevation: 8,
             borderWidth: 1,
             borderColor: theme.colors.cardBorder,
-            shadowColor: theme.colors.shadow,
-            shadowOffset: { width: 0, height: 3 },
-            shadowOpacity: 0.15,
-            shadowRadius: 4,
-            elevation: 5,
-            alignItems: 'center',
+        },
+        welcomeIcon: {
+            fontSize: 48,
         },
         welcomeTitle: {
-            fontSize: isSmallScreen ? 22 : screenWidth < 768 ? 24 : 26,
+            fontSize: 32,
             fontWeight: 'bold',
             color: theme.colors.text,
-            marginBottom: 15,
+            marginBottom: 12,
             textAlign: 'center',
         },
         welcomeText: {
-            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
-            color: theme.colors.text,
-            textAlign: 'center',
-            marginBottom: 10,
-            lineHeight: 22,
-        },
-        welcomeHint: {
-            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
+            fontSize: 16,
             color: theme.colors.secondaryText,
             textAlign: 'center',
-            marginTop: 10,
+            marginBottom: 32,
+            lineHeight: 24,
+            maxWidth: '85%',
         },
-        locationToggleButton: {
-            backgroundColor: theme.colors.buttonBackground,
-            padding: 15,
-            borderRadius: 10,
-            marginTop: 20,
-            marginBottom: 15,
+        welcomeButton: {
+            backgroundColor: theme.colors.accent,
+            paddingVertical: 16,
+            paddingHorizontal: 32,
+            borderRadius: 30,
+            shadowColor: theme.colors.accent,
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 6,
+            flexDirection: 'row',
             alignItems: 'center',
-            shadowColor: theme.colors.shadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 3,
-            elevation: 4,
+            gap: 8,
         },
-        locationToggleText: {
-            color: theme.colors.buttonText,
-            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
+        welcomeButtonText: {
+            color: '#FFFFFF',
+            fontSize: 18,
             fontWeight: 'bold',
-        },
-        offlineMessageContainer: {
-            backgroundColor: theme.colors.cardBackground,
-            padding: 20,
-            borderRadius: 10,
-            borderWidth: 1,
-            borderColor: theme.colors.cardBorder,
-        },
-        offlineMessageText: {
-            color: theme.colors.text,
-            fontSize: isSmallScreen ? 14 : screenWidth < 768 ? 15 : 16,
-            textAlign: 'center',
         },
         modalOverlay: {
             flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
             justifyContent: 'center',
             alignItems: 'center',
             padding: 20,
         },
         modalContent: {
-            backgroundColor: theme.colors.cardBackground,
             borderRadius: 20,
-            padding: isSmallScreen ? 25 : 30,
             width: '90%',
             maxWidth: 400,
+        },
+        modalInnerContent: {
+            padding: 30,
             alignItems: 'center',
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 10,
-            borderWidth: 1,
-            borderColor: theme.colors.cardBorder,
+            // Arka plan rengini artırarak arkadaki kırmızı yansımayı engelle
+            backgroundColor: theme.type === 'dark' ? 'rgba(30, 41, 59, 0.5)' : 'rgba(255, 255, 255, 0.5)',
+            borderRadius: 20,
         },
         modalIcon: {
-            fontSize: isSmallScreen ? 48 : 56,
+            fontSize: 48,
             marginBottom: 15,
+            textAlign: 'center',
         },
         modalTitle: {
-            fontSize: isSmallScreen ? 18 : 20,
+            fontSize: 20,
             fontWeight: 'bold',
             color: theme.colors.text,
             marginBottom: 12,
             textAlign: 'center',
         },
         modalMessage: {
-            fontSize: isSmallScreen ? 14 : 16,
+            fontSize: 16,
             color: theme.colors.text,
             textAlign: 'center',
             marginBottom: 10,
             lineHeight: 22,
         },
         modalSubMessage: {
-            fontSize: isSmallScreen ? 12 : 14,
+            fontSize: 14,
             color: theme.colors.secondaryText,
             textAlign: 'center',
             marginBottom: 20,
             lineHeight: 20,
         },
         modalButton: {
-            backgroundColor: theme.colors.buttonBackground,
+            backgroundColor: theme.colors.accent,
             paddingVertical: 12,
             paddingHorizontal: 40,
             borderRadius: 25,
             marginTop: 10,
             minWidth: 120,
-            shadowColor: theme.colors.shadow,
-            shadowOffset: { width: 0, height: 2 },
-            shadowOpacity: 0.2,
-            shadowRadius: 3,
-            elevation: 3,
         },
         modalButtonText: {
-            color: theme.colors.buttonText,
-            fontSize: isSmallScreen ? 14 : 16,
+            color: '#FFFFFF',
+            fontSize: 16,
             fontWeight: 'bold',
             textAlign: 'center',
         },
