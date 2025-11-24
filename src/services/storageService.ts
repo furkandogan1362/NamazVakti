@@ -189,3 +189,41 @@ export const loadMonthlyLastShownDate = async (): Promise<string | null> => {
         return null;
     }
 };
+
+// Tema onboarding durumu
+export const saveThemeOnboardingShown = async (): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('themeOnboardingShown', 'true');
+    } catch (error) {
+        console.error('Error saving theme onboarding shown:', error);
+    }
+};
+
+export const loadThemeOnboardingShown = async (): Promise<boolean> => {
+    try {
+        const result = await AsyncStorage.getItem('themeOnboardingShown');
+        return result === 'true';
+    } catch (error) {
+        console.error('Error loading theme onboarding shown:', error);
+        return false;
+    }
+};
+
+// Konum onboarding durumu
+export const saveLocationOnboardingShown = async (): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('locationOnboardingShown', 'true');
+    } catch (error) {
+        console.error('Error saving location onboarding shown:', error);
+    }
+};
+
+export const loadLocationOnboardingShown = async (): Promise<boolean> => {
+    try {
+        const result = await AsyncStorage.getItem('locationOnboardingShown');
+        return result === 'true';
+    } catch (error) {
+        console.error('Error loading location onboarding shown:', error);
+        return false;
+    }
+};

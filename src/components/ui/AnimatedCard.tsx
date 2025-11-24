@@ -1,12 +1,7 @@
-import React, { useEffect } from 'react';
-import { ViewStyle, StyleProp } from 'react-native';
-import Animated, { 
-  useAnimatedStyle, 
-  useSharedValue, 
-  withDelay, 
-  withSpring,
-  withTiming,
-  FadeInDown
+import React from 'react';
+import { ViewStyle, StyleProp, StyleSheet } from 'react-native';
+import Animated, {
+  FadeInDown,
 } from 'react-native-reanimated';
 import GlassView from './GlassView';
 
@@ -21,19 +16,28 @@ interface AnimatedCardProps {
 const AnimatedCard: React.FC<AnimatedCardProps> = ({ children, style, delay = 0, index = 0, scale = 1 }) => {
   // Simple entry animation using Layout Animations from Reanimated
   // FadeInDown.delay(delay * index)
-  
+
   return (
-    <Animated.View 
+    <Animated.View
       entering={FadeInDown.delay(delay + (index * 100)).springify().damping(12)}
       style={style}
     >
-      <Animated.View style={{ flex: 1, transform: [{ scale }] }}>
-        <GlassView style={{ flex: 1 }}>
+      <Animated.View style={[styles.container, { transform: [{ scale }] }]}>
+        <GlassView style={styles.glass}>
           {children}
         </GlassView>
       </Animated.View>
     </Animated.View>
   );
 };
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
+  glass: {
+    flex: 1,
+  },
+});
 
 export default AnimatedCard;

@@ -11,10 +11,10 @@
  * - Ana kullanıcı arayüzünün oluşturulması
  * - Çevrimdışı/çevrimiçi durum yönetimi
  */
-
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, StatusBar } from 'react-native';
-import LocationPicker from './components/LocationPicker';
+import LocationModal from './components/LocationModal';
 import PrayerTimesDisplay from './components/PrayerTimesDisplay';
 import WeeklyPrayerTimes from './screens/WeeklyPrayerTimes';
 import MonthlyPrayerTimes from './screens/MonthlyPrayerTimes';
@@ -26,12 +26,19 @@ import { usePrayerTimes } from './hooks/usePrayerTimes';
 import * as storageService from './services/storageService';
 import GradientBackground from './components/ui/GradientBackground';
 import GlassView from './components/ui/GlassView';
+import OnboardingOverlay from './components/OnboardingOverlay';
+import {
+    loadThemeOnboardingShown,
+    saveThemeOnboardingShown,
+    loadLocationOnboardingShown,
+    saveLocationOnboardingShown,
+} from './services/storageService';
 
 type ScreenType = 'home' | 'weekly' | 'monthly';
 
 const AppContent: React.FC = () => {
     const { isOnline } = useNetwork();
-    const { selectedLocation } = useLocation();
+    const { selectedLocation, setSelectedLocation } = useLocation();
     const { theme, toggleTheme, isSmallScreen, screenWidth } = useTheme();
     const { currentDayPrayerTime, allPrayerTimes } = usePrayerTimes();
     useLocationData();
@@ -46,6 +53,12 @@ const AppContent: React.FC = () => {
         city: string;
         region: string;
     } | null>(null);
+
+    const themeButtonRef = React.useRef<React.ElementRef<typeof TouchableOpacity>>(null);
+    const locationButtonRef = React.useRef<React.ElementRef<typeof TouchableOpacity>>(null);
+
+    const [onboardingStep, setOnboardingStep] = useState<0 | 1 | 2>(0); // 0: None, 1: Theme, 2: Location
+    const [targetLayout, setTargetLayout] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
 
 
     // İlk yüklemede cache kontrolü - render ÖNCESINDE
@@ -89,6 +102,40 @@ const AppContent: React.FC = () => {
         }
     }, [selectedLocation]);
 
+    // Modal kapandığında onboarding kontrolü
+    useEffect(() => {
+        if (!isLocationPickerOpen) {
+            const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
+
+            if (hasFullLocation) {
+                const checkOnboarding = async () => {
+                    const themeShown = await loadThemeOnboardingShown();
+                    if (!themeShown) {
+                        // Start with Theme Onboarding (Step 1)
+                        setTimeout(() => {
+                            themeButtonRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+                                setTargetLayout({ x: pageX, y: pageY, width, height });
+                                setOnboardingStep(1);
+                            });
+                        }, 500);
+                    } else {
+                        // Check Location Onboarding (Step 2)
+                        const locationShown = await loadLocationOnboardingShown();
+                        if (!locationShown) {
+                            setTimeout(() => {
+                                locationButtonRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+                                    setTargetLayout({ x: pageX, y: pageY, width, height });
+                                    setOnboardingStep(2);
+                                });
+                            }, 500);
+                        }
+                    }
+                };
+                checkOnboarding();
+            }
+        }
+    }, [isLocationPickerOpen, selectedLocation]);
+
     // İnternet bağlantısı geldiğinde offline modalı kapat ve konum seçiciyi aç
     useEffect(() => {
         if (isOnline && showOfflineModal) {
@@ -119,6 +166,40 @@ const AppContent: React.FC = () => {
     const handleMonthlyPress = useCallback(() => {
         setCurrentScreen('monthly');
     }, []);
+
+    const handleCloseLocationPicker = useCallback(() => {
+        // Eğer tam konum seçilmediyse, önceki geçerli konuma geri dön
+        const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
+
+        if (!hasFullLocation) {
+            if (previousLocation) {
+                setSelectedLocation(previousLocation);
+            } else {
+                // Hiçbir konum yoksa (ilk açılış) boş bırak
+                setSelectedLocation({ country: '', city: '', region: '' });
+            }
+        }
+
+        setIsLocationPickerOpen(false);
+    }, [selectedLocation, previousLocation, setSelectedLocation]);
+
+    const handleOnboardingClose = async () => {
+        if (onboardingStep === 1) {
+            // Theme onboarding done, move to location onboarding
+            await saveThemeOnboardingShown();
+
+            // Measure location button and show step 2
+            locationButtonRef.current?.measure((x: number, y: number, width: number, height: number, pageX: number, pageY: number) => {
+                setTargetLayout({ x: pageX, y: pageY, width, height });
+                setOnboardingStep(2);
+            });
+        } else if (onboardingStep === 2) {
+            // Location onboarding done, finish
+            await saveLocationOnboardingShown();
+            setOnboardingStep(0);
+            setTargetLayout(null);
+        }
+    };
 
     // allPrayerTimes'ı memoize et (gereksiz yeniden render'ları önle)
     const memoizedPrayerTimes = useMemo(() => allPrayerTimes, [allPrayerTimes]);
@@ -161,16 +242,24 @@ const AppContent: React.FC = () => {
                     <Text style={styles.headerTitle}>Namaz Vakti</Text>
                     <View style={styles.headerButtons}>
                         <TouchableOpacity
+                            ref={locationButtonRef}
                             style={styles.iconButton}
                             onPress={handleToggleLocationPicker}
+                            onLayout={() => {}} // Force layout calculation
                         >
                             <View style={styles.iconButtonInner}>
-                                <Text style={styles.iconButtonText}>📍</Text>
+                                <MaterialIcons
+                                    name="location-on"
+                                    size={27}
+                                    color={theme.colors.accent}
+                                />
                             </View>
                         </TouchableOpacity>
                         <TouchableOpacity
+                            ref={themeButtonRef}
                             style={styles.iconButton}
                             onPress={toggleTheme}
+                            onLayout={() => {}} // Force layout calculation
                         >
                             <View style={styles.iconButtonInner}>
                                 <Text style={styles.iconButtonText}>
@@ -181,7 +270,7 @@ const AppContent: React.FC = () => {
                     </View>
                 </View>
 
-                {!isOnline && (
+                {!isOnline && hasCachedData && (
                     <View style={styles.offlineContainer}>
                         <Text style={styles.offlineIcon}>📡</Text>
                         <View>
@@ -207,6 +296,7 @@ const AppContent: React.FC = () => {
                                 locationInfo={displayLocation!}
                                 onWeeklyPress={handleWeeklyPress}
                                 onMonthlyPress={handleMonthlyPress}
+                                isPaused={isLocationPickerOpen}
                             />
                         );
                     }
@@ -237,34 +327,10 @@ const AppContent: React.FC = () => {
                 })()}
 
                 {/* Location Picker Modal */}
-                <Modal
-                    animationType="fade"
-                    transparent={true}
+                <LocationModal
                     visible={isLocationPickerOpen && isOnline}
-                    onRequestClose={() => setIsLocationPickerOpen(false)}
-                >
-                    <View style={styles.modalOverlay}>
-                        <GlassView style={styles.locationModalContent} autoHeight={true} overlayOpacity={0.95}>
-                            <View style={styles.locationModalInner}>
-                                <View style={styles.locationModalHeader}>
-                                    <Text style={styles.locationModalTitle}>Konum Değiştir</Text>
-                                    <TouchableOpacity
-                                        style={styles.closeButton}
-                                        onPress={() => setIsLocationPickerOpen(false)}
-                                    >
-                                        <Text style={styles.closeButtonText}>✕</Text>
-                                    </TouchableOpacity>
-                                </View>
-
-                                <Text style={styles.locationModalMessage}>
-                                    Namaz vakitlerini doğru görüntülemek için lütfen konumunuzu seçin.
-                                </Text>
-
-                                <LocationPicker onClose={() => setIsLocationPickerOpen(false)} />
-                            </View>
-                        </GlassView>
-                    </View>
-                </Modal>
+                    onClose={handleCloseLocationPicker}
+                />
 
                 {/* Offline Warning Modal */}
                 <Modal
@@ -294,6 +360,36 @@ const AppContent: React.FC = () => {
                         </GlassView>
                     </View>
                 </Modal>
+
+                {/* Onboarding Overlay */}
+                <OnboardingOverlay
+                    visible={onboardingStep > 0}
+                    targetLayout={targetLayout}
+                    onClose={handleOnboardingClose}
+                    theme={theme}
+                    title={onboardingStep === 1 ? 'Tema Ayarı' : 'Konum Değiştirme'}
+                    message={onboardingStep === 1
+                        ? 'Temanız sisteminizin temasına göre ayarlandı, dilerseniz yukarıdaki tema değiştirme butonuna tıklayarak temanızı değiştirebilirsiniz.'
+                        : 'Konumunuzu değiştirmek isterseniz yukarıdaki konum butonuna tıklayarak yeni bir konum seçebilirsiniz.'
+                    }
+                    stepText={onboardingStep === 1 ? '1/2' : '2/2'}
+                    onSpotlightPress={onboardingStep === 1 ? toggleTheme : handleToggleLocationPicker}
+                    renderSpotlightContent={() => (
+                        <View style={styles.iconButtonInner}>
+                            {onboardingStep === 1 ? (
+                                <Text style={styles.iconButtonText}>
+                                    {theme.type === 'light' ? '🌙' : '☀️'}
+                                </Text>
+                            ) : (
+                                <MaterialIcons
+                                    name="location-on"
+                                    size={27}
+                                    color={theme.colors.accent}
+                                />
+                            )}
+                        </View>
+                    )}
+                />
             </ScrollView>
         </GradientBackground>
     );
@@ -468,21 +564,18 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
             maxWidth: '85%',
         },
         welcomeButton: {
-            backgroundColor: theme.colors.accent,
+            backgroundColor: theme.type === 'dark' ? 'rgba(30, 41, 59, 0.8)' : 'rgba(255, 255, 255, 0.9)',
             paddingVertical: 16,
             paddingHorizontal: 32,
             borderRadius: 30,
-            shadowColor: theme.colors.accent,
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.3,
-            shadowRadius: 8,
-            elevation: 6,
+            borderWidth: 1,
+            borderColor: theme.colors.accent,
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
         },
         welcomeButtonText: {
-            color: '#FFFFFF',
+            color: theme.colors.text,
             fontSize: 18,
             fontWeight: 'bold',
         },

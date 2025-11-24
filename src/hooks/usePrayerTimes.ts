@@ -10,7 +10,7 @@
  * - Son güncelleme tarihini takip eder
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from '../contexts/LocationContext';
 import { useNetwork } from '../contexts/NetworkContext';
 import { fetchPrayerTimesByLocationId } from '../api/apiService';
@@ -32,13 +32,20 @@ export const usePrayerTimes = () => {
     const { selectedLocation, regions } = useLocation();
     const { isOnline } = useNetwork();
 
+    // Ref to hold the latest allPrayerTimes to avoid dependency cycles
+    const allPrayerTimesRef = useRef(allPrayerTimes);
+
+    useEffect(() => {
+        allPrayerTimesRef.current = allPrayerTimes;
+    }, [allPrayerTimes]);
+
     const updateCurrentDayPrayerTime = useCallback(() => {
         // Türkiye saat dilimine göre tarihi al (UTC+3)
         const now = new Date();
         const utcTime = now.getTime();
         const turkeyOffset = 3 * 60 * 60 * 1000; // UTC+3 in milliseconds
         const turkeyTime = new Date(utcTime + turkeyOffset);
-        
+
         // Manuel olarak YYYY-MM-DD formatında oluştur
         const year = turkeyTime.getUTCFullYear();
         const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
@@ -58,6 +65,10 @@ export const usePrayerTimes = () => {
     const fetchPrayerTimes = useCallback(async () => {
         // İnternet yoksa direkt cache'den yükle, bölge kontrolüne gerek yok
         if (!isOnline) {
+            // Eğer zaten veri varsa tekrar yükleme (Loop'u engelle)
+            if (allPrayerTimesRef.current.length > 0) {
+                return;
+            }
             const cachedTimes = await loadPrayerTimes();
             if (cachedTimes && cachedTimes.length > 0) {
                 setAllPrayerTimes(cachedTimes);
@@ -66,14 +77,14 @@ export const usePrayerTimes = () => {
         }
 
         const { country, city, region } = selectedLocation;
-        
+
         if (country && city && region && regions.length) {
             const selectedRegionObject = regions.find(r => r.region === region);
-            
+
             if (selectedRegionObject) {
                 // Konum değişti mi kontrol et
                 const locationChanged = lastLocationId !== null && lastLocationId !== selectedRegionObject.id;
-                
+
                 // Cache süresi kontrolü: Son veri çekme tarihinden 15 gün geçmişse API'den çek
                 const now = new Date();
                 const cacheExpired = !lastFetchDate ||
@@ -87,8 +98,8 @@ export const usePrayerTimes = () => {
                 const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
                 const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
                 const today = `${year}-${month}-${day}`;
-                
-                const hasDataForToday = allPrayerTimes.some(pt => pt.date.split('T')[0] === today);
+
+                const hasDataForToday = allPrayerTimesRef.current.some(pt => pt.date.split('T')[0] === today);
 
                 // Konum değiştiyse, cache süresi dolmuşsa veya bugünün verisi yoksa API'den çek
                 const shouldFetch = locationChanged || cacheExpired || !hasDataForToday;
@@ -117,7 +128,7 @@ export const usePrayerTimes = () => {
                 }
             }
         }
-    }, [selectedLocation, regions, isOnline, lastFetchDate, lastLocationId, allPrayerTimes]);
+    }, [selectedLocation, regions, isOnline, lastFetchDate, lastLocationId]); // allPrayerTimes bağımlılığı kaldırıldı
 
     useEffect(() => {
         const initializePrayerTimes = async () => {

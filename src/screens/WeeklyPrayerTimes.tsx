@@ -27,7 +27,7 @@ const WeeklyPrayerTimes: React.FC<WeeklyPrayerTimesProps> = ({ prayerTimes, onBa
         const loadLastDate = async () => {
             const savedDate = await loadWeeklyLastShownDate();
             setLastShownDate(savedDate);
-            
+
             // Kısa bir gecikme sonrası loading'i kapat ve animasyonu başlat
             setTimeout(() => {
                 setIsLoading(false);
@@ -64,7 +64,7 @@ const WeeklyPrayerTimes: React.FC<WeeklyPrayerTimesProps> = ({ prayerTimes, onBa
         const utcTime = now.getTime();
         const turkeyOffset = 3 * 60 * 60 * 1000;
         const turkeyTime = new Date(utcTime + turkeyOffset);
-        
+
         const year = turkeyTime.getUTCFullYear();
         const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
         const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
@@ -82,7 +82,7 @@ const WeeklyPrayerTimes: React.FC<WeeklyPrayerTimesProps> = ({ prayerTimes, onBa
         }
 
         const todayIndex = prayerTimes.findIndex(pt => pt.date.split('T')[0] === today);
-        
+
         if (todayIndex !== -1) {
             return prayerTimes.slice(todayIndex, todayIndex + 7);
         }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useLocation } from '../contexts/LocationContext';
@@ -19,15 +19,8 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
         setCountries,
     } = useLocation();
     const { theme, isSmallScreen, screenWidth } = useTheme();
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(countries.length === 0);
     const [error, setError] = useState('');
-
-    useEffect(() => {
-        if (countries.length === 0) {
-            loadCountries();
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     const loadCountries = async () => {
         setLoading(true);
@@ -42,13 +35,55 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
         }
     };
 
+    useEffect(() => {
+        if (countries.length === 0) {
+            loadCountries();
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     const handleConfirmLocation = () => {
         if (selectedLocation.country && selectedLocation.city && selectedLocation.region) {
             onClose();
         }
     };
 
-    const styles = createStyles(theme, isSmallScreen, screenWidth);
+    const styles = useMemo(() => createStyles(theme, isSmallScreen, screenWidth), [theme, isSmallScreen, screenWidth]);
+
+    // Memoize picker items to prevent unnecessary re-renders of large lists
+    const countryItems = useMemo(() => {
+        return [
+            <Picker.Item key="default" label="Ülke Seçiniz" value="" />,
+            ...countries.map((country) => (
+                <Picker.Item key={country} label={country} value={country} />
+            )),
+        ];
+    }, [countries]);
+
+    const cityItems = useMemo(() => {
+        return [
+            <Picker.Item key="default" label="Şehir Seçiniz" value="" />,
+            ...cities.map((city) => (
+                <Picker.Item key={city} label={city} value={city} />
+            )),
+        ];
+    }, [cities]);
+
+    const regionItems = useMemo(() => {
+        return [
+            <Picker.Item key="default" label="İlçe Seçiniz" value="" />,
+            ...regions.map((region) => {
+                const displayName = region.region || selectedLocation.city;
+                return (
+                    <Picker.Item
+                        key={region.id}
+                        label={displayName}
+                        value={displayName}
+                    />
+                );
+            }),
+        ];
+    }, [regions, selectedLocation.city]);
 
     if (loading) {
         return (
@@ -93,10 +128,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                         style={styles.picker}
                         dropdownIconColor={theme.colors.text}
                     >
-                        <Picker.Item label="Ülke Seçiniz" value="" />
-                        {countries.map((country) => (
-                            <Picker.Item key={country} label={country} value={country} />
-                        ))}
+                        {countryItems}
                     </Picker>
                 </View>
             </View>
@@ -112,10 +144,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                         enabled={!!selectedLocation.country}
                         dropdownIconColor={theme.colors.text}
                     >
-                        <Picker.Item label="Şehir Seçiniz" value="" />
-                        {cities.map((city) => (
-                            <Picker.Item key={city} label={city} value={city} />
-                        ))}
+                        {cityItems}
                     </Picker>
                 </View>
             </View>
@@ -131,17 +160,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                         enabled={!!selectedLocation.city}
                         dropdownIconColor={theme.colors.text}
                     >
-                        <Picker.Item label="İlçe Seçiniz" value="" />
-                        {regions.map((region) => {
-                            const displayName = region.region || selectedLocation.city;
-                            return (
-                                <Picker.Item
-                                    key={region.id}
-                                    label={displayName}
-                                    value={displayName}
-                                />
-                            );
-                        })}
+                        {regionItems}
                     </Picker>
                 </View>
             </View>
@@ -159,6 +178,8 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
         </View>
     );
 };
+
+export default React.memo(LocationPicker);
 
 const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number) => {
     return StyleSheet.create({

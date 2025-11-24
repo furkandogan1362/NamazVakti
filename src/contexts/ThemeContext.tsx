@@ -10,8 +10,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../constants/theme';
 
 // Android için LayoutAnimation'ı aktifleştir
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-    UIManager.setLayoutAnimationEnabledExperimental(true);
+if (Platform.OS === 'android') {
+    if (UIManager.setLayoutAnimationEnabledExperimental) {
+        UIManager.setLayoutAnimationEnabledExperimental(true);
+    }
 }
 
 export type ThemeType = 'light' | 'dark';
@@ -119,7 +121,7 @@ const ThemeContext = createContext<ThemeContextType>({
 
 export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
     const systemScheme = useColorScheme();
-    const [themeType, setThemeType] = useState<ThemeType>('light'); // Başlangıç değeri geçici, useEffect ile güncellenecek
+    const [themeType, setThemeType] = useState<ThemeType>(systemScheme === 'dark' ? 'dark' : 'light');
     const [dimensions, setDimensions] = useState(Dimensions.get('window'));
 
     // Tema tercihini yükle
@@ -129,20 +131,15 @@ export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children 
                 const savedTheme = await AsyncStorage.getItem('themePreference');
                 if (savedTheme === 'light' || savedTheme === 'dark') {
                     setThemeType(savedTheme);
-                } else {
-                    // Kayıtlı tema yoksa sistem temasını kullan
-                    const defaultTheme = systemScheme === 'dark' ? 'dark' : 'light';
-                    setThemeType(defaultTheme);
                 }
+                // Kayıtlı tema yoksa, başlangıçta systemScheme kullanıldığı için
+                // ekstra bir işlem yapmaya gerek yok.
             } catch (error) {
                 console.error('Error loading theme preference:', error);
-                // Hata durumunda da sistem temasını kullanmaya çalış
-                const defaultTheme = systemScheme === 'dark' ? 'dark' : 'light';
-                setThemeType(defaultTheme);
             }
         };
         loadThemePreference();
-    }, []); // Sadece mount anında çalışsın, systemScheme değişirse otomatik değişmesin (kullanıcı tercihi önemli)
+    }, []);
 
     useEffect(() => {
         const subscription = Dimensions.addEventListener('change', ({ window }) => {
@@ -153,22 +150,7 @@ export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children 
     }, []);
 
     const toggleTheme = async () => {
-        // Daha yavaş ve yumuşak bir geçiş için özel animasyon konfigürasyonu
-        LayoutAnimation.configureNext({
-            duration: 800, // Süreyi 800ms'ye çıkardık (daha yavaş)
-            create: {
-                type: LayoutAnimation.Types.easeInEaseOut,
-                property: LayoutAnimation.Properties.opacity,
-            },
-            update: {
-                type: LayoutAnimation.Types.easeInEaseOut,
-            },
-            delete: {
-                type: LayoutAnimation.Types.easeInEaseOut,
-                property: LayoutAnimation.Properties.opacity,
-            },
-        });
-        
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         const newTheme = themeType === 'light' ? 'dark' : 'light';
         setThemeType(newTheme);
         try {

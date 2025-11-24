@@ -28,9 +28,11 @@ interface PrayerTimes {
 interface Props {
     prayerTimes: PrayerTimes | null;
     allPrayerTimes?: PrayerTimes[];
+    isPaused?: boolean;
+    timezone?: string;
 }
 
-const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) => {
+const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [], isPaused = false, timezone }) => {
     const [timeUntilNextPrayer, setTimeUntilNextPrayer] = useState<string>('');
     const [nextPrayer, setNextPrayer] = useState<string>('');
     const [progress, setProgress] = useState(0);
@@ -50,29 +52,58 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
     };
 
     useEffect(() => {
-        if (!prayerTimes) { return; }
+        if (!prayerTimes || isPaused) { return; }
 
         const calculateTimeUntilNextPrayer = () => {
             const now = new Date();
-            // Use device local time instead of forced Turkey time
-            // This ensures the countdown is correct relative to the user's device time
+            let currentHours, currentMinutes, currentSeconds;
+
+            // Get current time in the target timezone
+            if (timezone) {
+                try {
+                    const parts = new Intl.DateTimeFormat('en-US', {
+                        timeZone: timezone,
+                        hour: 'numeric',
+                        minute: 'numeric',
+                        second: 'numeric',
+                        hour12: false,
+                    }).formatToParts(now);
+
+                    const getPart = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0', 10);
+                    currentHours = getPart('hour');
+                    // Handle 24h format edge case where 24 might be returned as 0 or 24 depending on implementation
+                    if (currentHours === 24) { currentHours = 0; }
+
+                    currentMinutes = getPart('minute');
+                    currentSeconds = getPart('second');
+                } catch (e) {
+                    currentHours = now.getHours();
+                    currentMinutes = now.getMinutes();
+                    currentSeconds = now.getSeconds();
+                }
+            } else {
+                currentHours = now.getHours();
+                currentMinutes = now.getMinutes();
+                currentSeconds = now.getSeconds();
+            }
+
+            const currentTotalSeconds = currentHours * 3600 + currentMinutes * 60 + currentSeconds;
 
             const prayerNames = ['fajr', 'sun', 'dhuhr', 'asr', 'maghrib', 'isha'];
-            let nextPrayerTime: Date | null = null;
+            let nextPrayerSeconds: number | null = null;
             let nextPrayerName: string = '';
-            let prevPrayerTime: Date | null = null;
+            let prevPrayerSeconds: number | null = null;
 
             // Find the next prayer time in today's prayers
             for (let i = 0; i < prayerNames.length; i++) {
                 const prayerName = prayerNames[i];
                 const timeString = prayerTimes[prayerName as keyof PrayerTimes];
                 if (timeString) {
-                    const prayerTime = new Date();
                     const [hours, minutes] = timeString.split(':').map(Number);
-                    prayerTime.setHours(hours, minutes, 0, 0);
+                    const prayerSeconds = hours * 3600 + minutes * 60;
 
-                    if (prayerTime > now) {
-                        nextPrayerTime = prayerTime;
+                    if (prayerSeconds > currentTotalSeconds) {
+                        nextPrayerSeconds = prayerSeconds;
                         nextPrayerName = prayerName.charAt(0).toUpperCase() + prayerName.slice(1);
 
                         // Previous prayer time
@@ -80,15 +111,12 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
                             const prevName = prayerNames[i - 1];
                             const prevTimeString = prayerTimes[prevName as keyof PrayerTimes];
                             const [prevH, prevM] = prevTimeString.split(':').map(Number);
-                            const prevDate = new Date();
-                            prevDate.setHours(prevH, prevM, 0, 0);
-                            prevPrayerTime = prevDate;
+                            prevPrayerSeconds = prevH * 3600 + prevM * 60;
                         } else {
                             // If next is Fajr (today), previous was Isha (yesterday)
-                            // We need to handle this carefully, but for now let's approximate
-                            const startOfDay = new Date();
-                            startOfDay.setHours(0, 0, 0, 0);
-                            prevPrayerTime = startOfDay;
+                            // We assume yesterday's Isha is roughly same as today's Isha - 24h
+                            // Or better, just use 0 (midnight) as start of day
+                            prevPrayerSeconds = 0;
                         }
                         break;
                     }
@@ -96,7 +124,7 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
             }
 
             // Yatsı geçti ama saat henüz 00:00 olmadı - yarının imsak vaktini göster
-            if (!nextPrayerTime && allPrayerTimes.length > 0) {
+            if (nextPrayerSeconds === null && allPrayerTimes.length > 0) {
                 // Yarının tarihini hesapla
                 const tomorrow = new Date();
                 tomorrow.setDate(tomorrow.getDate() + 1);
@@ -107,45 +135,37 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
 
                 if (tomorrowPrayer) {
                     // Yarının imsak vaktini kullan
-                    const fajrTime = new Date();
                     const [fajrHours, fajrMinutes] = tomorrowPrayer.fajr.split(':').map(Number);
-                    fajrTime.setDate(fajrTime.getDate() + 1);
-                    fajrTime.setHours(fajrHours, fajrMinutes, 0, 0);
-                    nextPrayerTime = fajrTime;
+                    nextPrayerSeconds = (fajrHours * 3600 + fajrMinutes * 60) + (24 * 3600); // Add 24 hours
                     nextPrayerName = 'Fajr';
 
                     // Previous prayer was today's Isha
-                    const ishaTime = new Date();
                     const [ishaHours, ishaMinutes] = prayerTimes.isha.split(':').map(Number);
-                    ishaTime.setHours(ishaHours, ishaMinutes, 0, 0);
-                    prevPrayerTime = ishaTime;
+                    prevPrayerSeconds = ishaHours * 3600 + ishaMinutes * 60;
 
                 } else {
                     // Fallback
-                    const fajrTime = new Date();
                     const [fajrHours, fajrMinutes] = prayerTimes.fajr.split(':').map(Number);
-                    fajrTime.setDate(fajrTime.getDate() + 1);
-                    fajrTime.setHours(fajrHours, fajrMinutes, 0, 0);
-                    nextPrayerTime = fajrTime;
+                    nextPrayerSeconds = (fajrHours * 3600 + fajrMinutes * 60) + (24 * 3600);
                     nextPrayerName = 'Fajr';
-                    prevPrayerTime = new Date(); // Fallback
+                    prevPrayerSeconds = currentTotalSeconds; // Fallback
                 }
             }
 
             // Calculate the time difference
-            if (nextPrayerTime) {
-                const diff = nextPrayerTime.getTime() - now.getTime();
-                const hours = Math.floor(diff / (1000 * 60 * 60));
-                const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-                const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            if (nextPrayerSeconds !== null) {
+                const diffSeconds = nextPrayerSeconds - currentTotalSeconds;
+                const hours = Math.floor(diffSeconds / 3600);
+                const minutes = Math.floor((diffSeconds % 3600) / 60);
+                const seconds = Math.floor(diffSeconds % 60);
 
                 setTimeUntilNextPrayer(`${hours.toString().padStart(2, '0')} : ${minutes.toString().padStart(2, '0')} : ${seconds.toString().padStart(2, '0')}`);
                 setNextPrayer(nextPrayerName);
 
                 // Calculate progress
-                if (prevPrayerTime) {
-                    const totalDuration = nextPrayerTime.getTime() - prevPrayerTime.getTime();
-                    const elapsed = now.getTime() - prevPrayerTime.getTime();
+                if (prevPrayerSeconds !== null) {
+                    const totalDuration = nextPrayerSeconds - prevPrayerSeconds;
+                    const elapsed = currentTotalSeconds - prevPrayerSeconds;
                     const p = Math.min(Math.max(elapsed / totalDuration, 0), 1);
                     setProgress(p);
                 }
@@ -159,7 +179,7 @@ const NextPrayerTime: React.FC<Props> = ({ prayerTimes, allPrayerTimes = [] }) =
         const interval = setInterval(calculateTimeUntilNextPrayer, 1000);
 
         return () => clearInterval(interval); // Cleanup on unmount
-    }, [prayerTimes, allPrayerTimes]);
+    }, [prayerTimes, allPrayerTimes, isPaused, timezone]);
 
     const styles = createStyles(theme, isSmallScreen, screenWidth);
     const turkishPrayerName = prayerNamesturkish[nextPrayer] || nextPrayer;

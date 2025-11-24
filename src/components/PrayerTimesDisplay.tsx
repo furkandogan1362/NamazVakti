@@ -15,8 +15,10 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Fontisto from 'react-native-vector-icons/Fontisto';
 import { PrayerTime } from '../types/types';
 import NextPrayerTime from './NextPrayerTime';
+import HeaderCard from './HeaderCard';
 import { useTheme } from '../contexts/ThemeContext';
 import AnimatedCard from './ui/AnimatedCard';
+import { useLocationTime } from '../hooks/useLocationTime';
 
 interface PrayerTimesDisplayProps {
     prayerTimes: PrayerTime;
@@ -28,6 +30,7 @@ interface PrayerTimesDisplayProps {
     };
     onWeeklyPress?: () => void;
     onMonthlyPress?: () => void;
+    isPaused?: boolean;
 }
 
 type PrayerKey = keyof Omit<PrayerTime, 'date'>;
@@ -38,9 +41,10 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
     locationInfo,
     onWeeklyPress,
     onMonthlyPress,
+    isPaused = false,
 }) => {
     const { theme, isSmallScreen, screenWidth } = useTheme();
-    const [currentTime, setCurrentTime] = useState('');
+    const { timezone } = useLocationTime(locationInfo);
 
     const prayerNames: Record<PrayerKey, string> = {
         fajr: 'İmsak',
@@ -52,17 +56,39 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
     };
 
     const prayerIcons: Record<PrayerKey, any> = {
-        fajr: 'cloudy-gusts', // İmsak için bulutlu ve rüzgarlı/sisli ikon
-        sun: 'day-haze', // wi-day-haze
-        dhuhr: 'day-sunny', // wi-day-sunny
-        asr: 'day-cloudy', // wi-day-cloudy
-        maghrib: 'night-alt-cloudy', // wi-night-alt-cloudy
-        isha: 'night-clear', // wi-night-clear
+        fajr: 'cloudy-gusts',
+        sun: 'day-haze',
+        dhuhr: 'day-sunny',
+        asr: 'day-cloudy',
+        maghrib: 'night-alt-cloudy',
+        isha: 'night-clear',
     };
 
     const getCurrentPrayer = (): PrayerKey => {
         const now = new Date();
-        const currentMinutes = now.getHours() * 60 + now.getMinutes();
+        let currentMinutes;
+
+        if (timezone) {
+            try {
+                const parts = new Intl.DateTimeFormat('en-US', {
+                    timeZone: timezone,
+                    hour: 'numeric',
+                    minute: 'numeric',
+                    hour12: false,
+                }).formatToParts(now);
+
+                const h = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
+                const m = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+                // Handle 24h format edge case
+                const hours = h === 24 ? 0 : h;
+                currentMinutes = hours * 60 + m;
+            } catch (e) {
+                currentMinutes = now.getHours() * 60 + now.getMinutes();
+            }
+        } else {
+            currentMinutes = now.getHours() * 60 + now.getMinutes();
+        }
+
         const times: Record<PrayerKey, number> = {} as Record<PrayerKey, number>;
 
         Object.keys(prayerNames).forEach((key) => {
@@ -85,90 +111,23 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
     const currentPrayer = getCurrentPrayer();
     const styles = createStyles(theme, isSmallScreen, screenWidth);
 
-    // Yerel saati güncelle (her saniye)
-    useEffect(() => {
-        const updateTime = () => {
-            const now = new Date();
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            setCurrentTime(`${hours}:${minutes}`);
-        };
-
-        updateTime(); // İlk değeri hemen ayarla
-        const interval = setInterval(updateTime, 1000); // Her saniye güncelle
-
-        return () => clearInterval(interval);
-    }, []);
-
-    // Tarih ve gün bilgisi (Türkiye saat dilimi)
-    const formatDate = () => {
-        // Türkiye saat dilimine göre tarih oluştur
-        const dateStr = prayerTimes.date.split('T')[0]; // "2025-11-18" formatında
-        const [year, month, day] = dateStr.split('-').map(Number);
-
-        // Türkiye saat dilimine göre Date oluştur
-        const date = new Date(year, month - 1, day);
-
-        const days = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-        const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-            'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
-
-        const dayName = days[date.getDay()];
-        const fullDate = `${day} ${months[month - 1]} ${year}`;
-
-        return { dayName, fullDate };
-    };
-
-    // Hicri takvim hesaplama (geliştirilmiş algoritma)
-    const getHijriDate = () => {
-        const dateStr = prayerTimes.date.split('T')[0];
-        const [year, month, day] = dateStr.split('-').map(Number);
-
-        // Miladi tarihi Julian gün sayısına çevir
-        let a = Math.floor((14 - month) / 12);
-        let y = year + 4800 - a;
-        let m = month + (12 * a) - 3;
-        let jd = day + Math.floor((153 * m + 2) / 5) + (365 * y) + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
-
-        // Julian günü Hicri takvime çevir
-        let l = jd - 1948440 + 10632;
-        let n = Math.floor((l - 1) / 10631);
-        l = l - 10631 * n + 354;
-        let j = (Math.floor((10985 - l) / 5316)) * (Math.floor((50 * l) / 17719)) + (Math.floor(l / 5670)) * (Math.floor((43 * l) / 15238));
-        l = l - (Math.floor((30 - j) / 15)) * (Math.floor((17719 * j) / 50)) - (Math.floor(j / 16)) * (Math.floor((15238 * j) / 43)) + 29;
-
-        let hijriMonth = Math.floor((24 * l) / 709);
-        let hijriDay = l - Math.floor((709 * hijriMonth) / 24);
-        let hijriYear = 30 * n + j - 30;
-
-        const hijriMonths = ['Muharrem', 'Safer', 'Rebiülevvel', 'Rebiülahir', 'Cemaziyelevvel',
-            'Cemaziyelahir', 'Recep', 'Şaban', 'Ramazan', 'Şevval', 'Zilkade', 'Zilhicce'];
-
-        return `${hijriDay} ${hijriMonths[hijriMonth - 1]} ${hijriYear}`;
-    };
-
-    const { fullDate } = formatDate();
-    const hijriDate = getHijriDate();
-
     return (
         <View style={styles.container}>
-            {/* Header Info */}
-            <AnimatedCard style={styles.headerCard} delay={0}>
-                <View style={styles.headerContent}>
-                    <View style={styles.locationContainer}>
-                        <Text style={styles.locationTitle}>{locationInfo.city}</Text>
-                        <Text style={styles.locationSubtitle}>{locationInfo.region}, {locationInfo.country}</Text>
-                    </View>
-                    <View style={styles.dateContainer}>
-                        <Text style={styles.timeText}>{currentTime}</Text>
-                        <Text style={styles.dateText}>{fullDate}</Text>
-                        <Text style={styles.hijriText}>{hijriDate}</Text>
-                    </View>
-                </View>
-            </AnimatedCard>
+            {/* Header Info - Saat her zaman güncel kalsın */}
+            <HeaderCard
+                locationInfo={locationInfo}
+                prayerTimes={prayerTimes}
+                isPaused={false}
+                timezone={timezone || undefined}
+            />
 
             {/* Next Prayer Circular Indicator */}
-            <NextPrayerTime prayerTimes={prayerTimes} allPrayerTimes={allPrayerTimes} />
+            <NextPrayerTime
+                prayerTimes={prayerTimes}
+                allPrayerTimes={allPrayerTimes}
+                isPaused={isPaused}
+                timezone={timezone || undefined}
+            />
 
             {/* Prayer Times Grid */}
             <View style={styles.gridContainer}>
@@ -188,7 +147,7 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
                                     name={prayerIcons[prayerKey]}
                                     size={22}
                                     color={isActive ? theme.colors.accent : theme.colors.text}
-                                    style={{ marginBottom: 8 }}
+                                    style={styles.prayerIcon}
                                 />
 
                                 <Text style={[styles.prayerTime, isActive && styles.activeText]}>{prayerTimes[prayerKey]}</Text>
@@ -310,27 +269,30 @@ const createStyles = (theme: any, isSmallScreen: boolean, _screenWidth: number) 
             flexDirection: 'row',
             justifyContent: 'center',
             gap: 15,
-            marginTop: 5,
-            marginBottom: 10,
+            marginTop: 15,
+            marginBottom: 20,
+            paddingHorizontal: 10,
         },
         actionButton: {
-            width: 120,
-            height: 40,
-            borderRadius: 20,
+            flex: 1,
+            maxWidth: 160,
+            height: 48,
+            borderRadius: 24,
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: theme.colors.cardBackground,
+            backgroundColor: theme.type === 'dark' ? 'rgba(255, 255, 255, 0.1)' : '#F8FAFC',
             borderWidth: 1,
-            borderColor: theme.colors.cardBorder,
+            borderColor: theme.colors.accent,
             shadowColor: theme.colors.shadow,
             shadowOffset: { width: 0, height: 2 },
             shadowOpacity: 0.1,
-            shadowRadius: 4,
-            elevation: 3,
+            shadowRadius: 3,
+            elevation: 2,
         },
         actionButtonText: {
             color: theme.colors.text,
-            fontWeight: '600',
+            fontWeight: 'bold',
+            fontSize: 14,
         },
     });
 };

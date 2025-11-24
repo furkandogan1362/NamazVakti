@@ -101,7 +101,7 @@ export const useLocationData = () => {
                 if (cachedRegions && cachedRegions.length > 0) {
                     const processedCached = cachedRegions.map(region => ({
                         ...region,
-                        region: region.region || selectedLocation.city
+                        region: region.region || selectedLocation.city,
                     }));
                     setRegions(processedCached);
 
@@ -109,7 +109,7 @@ export const useLocationData = () => {
                     if (processedCached.length === 1 && !selectedLocation.region) {
                         setSelectedLocation({
                             ...selectedLocation,
-                            region: processedCached[0].region
+                            region: processedCached[0].region,
                         });
                     }
                 }
@@ -118,21 +118,21 @@ export const useLocationData = () => {
                 if (isOnline) {
                     try {
                         const freshData = await fetchRegions(selectedLocation.country, selectedLocation.city);
-                        
+
                         if (freshData && freshData.length > 0) {
                             const processedData = freshData.map(region => ({
                                 ...region,
-                                region: region.region || selectedLocation.city
+                                region: region.region || selectedLocation.city,
                             }));
-                            
+
                             setRegions(processedData);
                             saveRegions(selectedLocation.country, selectedLocation.city, processedData);
-                            
+
                             // API'den yeni veri geldiğinde otomatik seçim yap
                             if (processedData.length === 1 && !selectedLocation.region) {
                                 setSelectedLocation({
                                     ...selectedLocation,
-                                    region: processedData[0].region
+                                    region: processedData[0].region,
                                 });
                             }
                         }
@@ -143,7 +143,8 @@ export const useLocationData = () => {
             }
         };
         loadRegionsData();
-    }, [selectedLocation.country, selectedLocation.city, selectedLocation.region, isOnline, setRegions, setSelectedLocation]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedLocation.country, selectedLocation.city, isOnline, setRegions, setSelectedLocation]);
 
     useEffect(() => {
         if (selectedLocation.country && selectedLocation.city && selectedLocation.region) {

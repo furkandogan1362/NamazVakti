@@ -1,31 +1,35 @@
 export const COLORS = {
   dark: {
-    background: ['#0F172A', '#1E1B4B', '#312E81'], // Deep Night Blue -> Indigo
-    card: 'rgba(30, 41, 59, 0.7)',
-    cardBorder: 'rgba(148, 163, 184, 0.1)',
-    text: '#F8FAFC',
-    secondaryText: '#CBD5E1', // Lighter for better readability in dark mode
-    accent: '#A5B4FC', // Lighter Indigo for better contrast
-    highlight: '#D8B4FE', // Lighter Purple
-    success: '#34D399', // Brighter Emerald
-    error: '#F87171',
-    glass: 'rgba(15, 23, 42, 0.6)',
-    icon: '#F1F5F9', // Brighter icon color
+    // Modern Professional Dark Theme (Zinc/Slate based with Sky Blue accent)
+    // Neutral, high contrast, easy on the eyes.
+    background: ['#09090B', '#18181B', '#27272A'], // Zinc 950 -> Zinc 900 -> Zinc 800
+    card: 'rgba(63, 63, 70, 0.75)', // Zinc 700 - Lighter than Zinc 800
+    cardBorder: '#6B7280', // Zinc 500
+    text: '#FAFAFA', // Zinc 50
+    secondaryText: '#A1A1AA', // Zinc 400
+    accent: '#38BDF8', // Sky 400 - Professional Blue
+    highlight: '#7DD3FC', // Sky 300
+    success: '#34D399', // Emerald 400
+    error: '#F87171', // Red 400
+    glass: 'rgba(39, 39, 42, 0.7)', // Zinc 800 - Lighter than Zinc 900
+    icon: '#E4E4E7', // Zinc 200
     shadow: '#000000',
+    buttonBackground: 'rgba(56, 189, 248, 0.15)', // Subtle blue tint for buttons
   },
   light: {
-    background: ['#D0E8FC', '#C8DDFE', '#E0EDFF'], // Slightly darker/softer blues to reduce glare
-    card: 'rgba(255, 255, 255, 0.55)', // Reduced opacity
-    cardBorder: 'rgba(255, 255, 255, 0.4)',
-    text: '#1E293B',
-    secondaryText: '#475569', // Darker for better contrast
-    accent: '#3B82F6', // Blue 500
-    highlight: '#8B5CF6', // Violet 500
-    success: '#10B981',
-    error: '#EF4444',
-    glass: 'rgba(255, 255, 255, 0.6)', // Reduced opacity
-    icon: '#334155',
+    background: ['#F0F9FF', '#E0F2FE', '#BAE6FD'], // Sky 50 -> 100 -> 200
+    card: 'rgba(255, 255, 255, 0.7)',
+    cardBorder: '#CBD5E1',
+    text: '#0F172A', // Slate 900
+    secondaryText: '#475569', // Slate 600
+    accent: '#0284C7', // Indigo 600 - Better contrast with Sky Blue background
+    highlight: '#0EA5E9', // Indigo 500
+    success: '#059669', // Emerald 600
+    error: '#DC2626', // Red 600
+    glass: 'rgba(255, 255, 255, 0.6)',
+    icon: '#334155', // Slate 700
     shadow: '#94A3B8',
+    buttonBackground: '#FFFFFF',
   },
 };
 
