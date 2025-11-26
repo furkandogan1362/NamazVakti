@@ -24,6 +24,35 @@ import {
 } from '../services/storageService';
 import { PrayerTime } from '../types/types';
 
+// Türkiye saat diliminde bugünün tarihini al
+const getTurkeyDate = (): string => {
+    const now = new Date();
+    const utcTime = now.getTime();
+    const turkeyOffset = 3 * 60 * 60 * 1000; // UTC+3
+    const turkeyTime = new Date(utcTime + turkeyOffset);
+
+    const year = turkeyTime.getUTCFullYear();
+    const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
+
+    return `${year}-${month}-${day}`;
+};
+
+// Bugünden itibaren belirtilen gün sayısı kadar veri var mı kontrol et
+const hasEnoughFutureData = (prayerTimes: PrayerTime[], daysNeeded: number): boolean => {
+    if (prayerTimes.length === 0) {return false;}
+
+    const today = getTurkeyDate();
+    const todayIndex = prayerTimes.findIndex(pt => pt.date.split('T')[0] === today);
+
+    if (todayIndex === -1) {return false;}
+
+    // Bugünden itibaren kaç gün veri var?
+    const remainingDays = prayerTimes.length - todayIndex;
+
+    return remainingDays >= daysNeeded;
+};
+
 export const usePrayerTimes = () => {
     const [allPrayerTimes, setAllPrayerTimes] = useState<PrayerTime[]>([]);
     const [currentDayPrayerTime, setCurrentDayPrayerTime] = useState<PrayerTime | null>(null);
@@ -41,16 +70,7 @@ export const usePrayerTimes = () => {
 
     const updateCurrentDayPrayerTime = useCallback(() => {
         // Türkiye saat dilimine göre tarihi al (UTC+3)
-        const now = new Date();
-        const utcTime = now.getTime();
-        const turkeyOffset = 3 * 60 * 60 * 1000; // UTC+3 in milliseconds
-        const turkeyTime = new Date(utcTime + turkeyOffset);
-
-        // Manuel olarak YYYY-MM-DD formatında oluştur
-        const year = turkeyTime.getUTCFullYear();
-        const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
-        const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
-        const today = `${year}-${month}-${day}`;
+        const today = getTurkeyDate();
 
         if (allPrayerTimes.length > 0) {
             // Bugünün verilerini bul ve göster
@@ -85,24 +105,16 @@ export const usePrayerTimes = () => {
                 // Konum değişti mi kontrol et
                 const locationChanged = lastLocationId !== null && lastLocationId !== selectedRegionObject.id;
 
-                // Cache süresi kontrolü: Son veri çekme tarihinden 15 gün geçmişse API'den çek
-                const now = new Date();
-                const cacheExpired = !lastFetchDate ||
-                    (now.getTime() - lastFetchDate.getTime()) > 15 * 24 * 60 * 60 * 1000; // 15 gün
-
                 // Bugünün verisi var mı kontrol et
-                const utcTime = now.getTime();
-                const turkeyOffset = 3 * 60 * 60 * 1000;
-                const turkeyTime = new Date(utcTime + turkeyOffset);
-                const year = turkeyTime.getUTCFullYear();
-                const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
-                const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
-                const today = `${year}-${month}-${day}`;
-
+                const today = getTurkeyDate();
                 const hasDataForToday = allPrayerTimesRef.current.some(pt => pt.date.split('T')[0] === today);
 
-                // Konum değiştiyse, cache süresi dolmuşsa veya bugünün verisi yoksa API'den çek
-                const shouldFetch = locationChanged || cacheExpired || !hasDataForToday;
+                // Bugünden itibaren en az 30 gün veri var mı? (aylık görünüm için)
+                const hasEnoughData = hasEnoughFutureData(allPrayerTimesRef.current, 30);
+
+                // Konum değiştiyse, bugünün verisi yoksa veya yeterli veri yoksa API'den çek
+                // Cache süresi kontrolü kaldırıldı - yeterli veri varsa çekme
+                const shouldFetch = locationChanged || !hasDataForToday || !hasEnoughData;
 
                 if (shouldFetch) {
                     try {
@@ -122,13 +134,13 @@ export const usePrayerTimes = () => {
                             setAllPrayerTimes(cachedTimes);
                         }
                     }
-                } else if (!locationChanged && !cacheExpired) {
-                    // Konum değişmedi ve cache geçerli, mevcut veriyi kullan
+                } else if (!locationChanged) {
+                    // Konum değişmedi, mevcut veriyi kullan
                     setLastLocationId(selectedRegionObject.id);
                 }
             }
         }
-    }, [selectedLocation, regions, isOnline, lastFetchDate, lastLocationId]); // allPrayerTimes bağımlılığı kaldırıldı
+    }, [selectedLocation, regions, isOnline, lastLocationId]); // allPrayerTimes ve lastFetchDate bağımlılığı kaldırıldı
 
     useEffect(() => {
         const initializePrayerTimes = async () => {
@@ -156,5 +168,5 @@ export const usePrayerTimes = () => {
         return () => clearInterval(interval);
     }, [allPrayerTimes, updateCurrentDayPrayerTime, lastFetchDate]);
 
-    return { currentDayPrayerTime, allPrayerTimes };
+    return { currentDayPrayerTime, allPrayerTimes, setAllPrayerTimes };
 };

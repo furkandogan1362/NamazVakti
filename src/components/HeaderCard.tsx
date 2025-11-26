@@ -21,7 +21,7 @@ const HeaderCard: React.FC<HeaderCardProps> = ({ locationInfo, prayerTimes, isPa
 
     // Yerel saati güncelle (her saniye)
     useEffect(() => {
-        if (isPaused) return;
+        if (isPaused) {return;}
 
         const updateTime = () => {
             const now = new Date();

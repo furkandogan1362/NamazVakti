@@ -20,12 +20,12 @@ export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
     const { country, city, region } = location;
     const [timezone, setTimezone] = useState<string>(Intl.DateTimeFormat().resolvedOptions().timeZone);
     const [loading, setLoading] = useState(false);
-    const [timeDiff, setTimeDiff] = useState(0);
+    const [timeDiff, _setTimeDiff] = useState(0);
     const { isOnline } = useNetwork();
 
     useEffect(() => {
         const fetchTimezone = async () => {
-            if (!country || !city) return;
+            if (!country || !city) {return;}
 
             const cacheKey = `${TIMEZONE_CACHE_KEY}_${country}_${city}_${region}`;
 
@@ -40,7 +40,7 @@ export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
                 console.error('Error reading timezone cache', e);
             }
 
-            if (!isOnline) return;
+            if (!isOnline) {return;}
 
             setLoading(true);
             try {
@@ -95,11 +95,11 @@ const searchLocation = async (query: string, countryFilter?: string): Promise<st
                     (r.country && r.country.toLowerCase() === normalizedFilter) ||
                     (r.country_code && r.country_code.toLowerCase() === normalizedFilter)
                 );
-                if (match && match.timezone) return match.timezone;
+                if (match && match.timezone) {return match.timezone;}
             }
 
             // Return first result with a timezone
-            if (data.results[0].timezone) return data.results[0].timezone;
+            if (data.results[0].timezone) {return data.results[0].timezone;}
         }
         return null;
     } catch (e) {

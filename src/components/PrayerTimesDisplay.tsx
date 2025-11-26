@@ -10,7 +10,7 @@
  * - NextPrayerTime bileşenini entegre eder
  */
 
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Fontisto from 'react-native-vector-icons/Fontisto';
 import { PrayerTime } from '../types/types';
@@ -77,8 +77,8 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
                     hour12: false,
                 }).formatToParts(now);
 
-                const h = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
-                const m = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+                const h = parseInt(parts.find(p => p.type === 'hour')?.value || '0', 10);
+                const m = parseInt(parts.find(p => p.type === 'minute')?.value || '0', 10);
                 // Handle 24h format edge case
                 const hours = h === 24 ? 0 : h;
                 currentMinutes = hours * 60 + m;

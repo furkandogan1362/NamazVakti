@@ -270,5 +270,3 @@ const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number)
         },
     });
 };
-
-export default LocationPicker;

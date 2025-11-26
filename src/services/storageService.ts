@@ -227,3 +227,121 @@ export const loadLocationOnboardingShown = async (): Promise<boolean> => {
         return false;
     }
 };
+
+// GPS konum izni kontrol durumu
+export const saveGPSPermissionAsked = async (): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('gpsPermissionAsked', 'true');
+    } catch (error) {
+        console.error('Error saving GPS permission asked:', error);
+    }
+};
+
+// GPS konum bilgisi
+export interface GPSCityInfo {
+    id: string;
+    name: string;
+    city: string;
+    country: string;
+}
+
+export const saveGPSCityInfo = async (cityInfo: GPSCityInfo): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('gpsCityInfo', JSON.stringify(cityInfo));
+    } catch (error) {
+        console.error('Error saving GPS city info:', error);
+    }
+};
+
+export const loadGPSCityInfo = async (): Promise<GPSCityInfo | null> => {
+    try {
+        const data = await AsyncStorage.getItem('gpsCityInfo');
+        return data ? JSON.parse(data) : null;
+    } catch (error) {
+        console.error('Error loading GPS city info:', error);
+        return null;
+    }
+};
+
+// GPS namaz vakitleri (30 günlük cache)
+export const saveGPSPrayerTimes = async (times: PrayerTime[]): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('gpsPrayerTimes', JSON.stringify(times));
+    } catch (error) {
+        console.error('Error saving GPS prayer times:', error);
+    }
+};
+
+export const loadGPSPrayerTimes = async (): Promise<PrayerTime[] | null> => {
+    try {
+        const savedTimes = await AsyncStorage.getItem('gpsPrayerTimes');
+        return savedTimes ? JSON.parse(savedTimes) : null;
+    } catch (error) {
+        console.error('Error loading GPS prayer times:', error);
+        return null;
+    }
+};
+
+// GPS son veri çekme tarihi
+export const saveGPSLastFetchDate = async (date: Date): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('gpsLastFetchDate', date.toISOString());
+    } catch (error) {
+        console.error('Error saving GPS last fetch date:', error);
+    }
+};
+
+export const loadGPSLastFetchDate = async (): Promise<Date | null> => {
+    try {
+        const savedDate = await AsyncStorage.getItem('gpsLastFetchDate');
+        return savedDate ? new Date(savedDate) : null;
+    } catch (error) {
+        console.error('Error loading GPS last fetch date:', error);
+        return null;
+    }
+};
+
+// Aktif konum modu (gps veya manual)
+export type LocationMode = 'gps' | 'manual';
+
+export const saveLocationMode = async (mode: LocationMode): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('locationMode', mode);
+    } catch (error) {
+        console.error('Error saving location mode:', error);
+    }
+};
+
+export const loadLocationMode = async (): Promise<LocationMode | null> => {
+    try {
+        const mode = await AsyncStorage.getItem('locationMode');
+        return mode as LocationMode | null;
+    } catch (error) {
+        console.error('Error loading location mode:', error);
+        return null;
+    }
+};
+
+// GPS verilerini temizle (manuel konuma geçişte)
+export const clearGPSData = async (): Promise<void> => {
+    try {
+        await AsyncStorage.removeItem('gpsPrayerTimes');
+        await AsyncStorage.removeItem('gpsLastFetchDate');
+        await AsyncStorage.removeItem('gpsCityInfo');
+        await AsyncStorage.removeItem('gpsCityId');
+    } catch (error) {
+        console.error('Error clearing GPS data:', error);
+    }
+};
+
+// Manuel verileri temizle (GPS konumuna geçişte)
+export const clearManualData = async (): Promise<void> => {
+    try {
+        await AsyncStorage.removeItem('prayerTimes');
+        await AsyncStorage.removeItem('lastFetchDate');
+        await AsyncStorage.removeItem('lastLocationId');
+        await AsyncStorage.removeItem('locationData');
+    } catch (error) {
+        console.error('Error clearing manual data:', error);
+    }
+};

@@ -45,7 +45,7 @@ const LocationModal: React.FC<LocationModalProps> = ({ visible, onClose }) => {
     );
 };
 
-const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) => {
+const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number) => {
     return StyleSheet.create({
         modalOverlay: {
             flex: 1,
