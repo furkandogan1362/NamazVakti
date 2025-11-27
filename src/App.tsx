@@ -30,6 +30,7 @@ import * as storageService from './services/storageService';
 import GradientBackground from './components/ui/GradientBackground';
 import GlassView from './components/ui/GlassView';
 import OnboardingOverlay from './components/OnboardingOverlay';
+import QiblaCompass from './components/QiblaCompass';
 import {
     loadThemeOnboardingShown,
     saveThemeOnboardingShown,
@@ -42,6 +43,7 @@ import {
     saveGPSPrayerTimes,
     saveGPSLastFetchDate,
     clearManualData,
+    clearGPSData,
 } from './services/storageService';
 
 type ScreenType = 'home' | 'weekly' | 'monthly';
@@ -58,7 +60,7 @@ const AppContent: React.FC = () => {
     const { selectedLocation, setSelectedLocation } = useLocation();
     const { theme, toggleTheme, isSmallScreen, screenWidth, fadeAnim } = useTheme();
     const { currentDayPrayerTime, allPrayerTimes, setAllPrayerTimes } = usePrayerTimes();
-    const { gpsPrayerTimes, currentDayPrayerTime: gpsCurrentDayPrayerTime, isGPSMode, refreshGPSPrayerTimes } = useGPSPrayerTimes();
+    const { gpsPrayerTimes, currentDayPrayerTime: gpsCurrentDayPrayerTime, isGPSMode, refreshGPSPrayerTimes, setGpsPrayerTimes: setGPSPrayerTimesHook, setIsGPSMode } = useGPSPrayerTimes();
     useLocationData();
 
     const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
@@ -79,6 +81,9 @@ const AppContent: React.FC = () => {
     // Location Method Modal state
     const [showLocationMethodModal, setShowLocationMethodModal] = useState(false);
     const [locationMode, setLocationMode] = useState<'gps' | 'manual' | null>(null);
+
+    // Qibla Compass Modal state
+    const [showQiblaCompass, setShowQiblaCompass] = useState(false);
 
 
 
@@ -237,6 +242,7 @@ const AppContent: React.FC = () => {
             // Konum modunu GPS olarak ayarla
             await saveLocationMode('gps');
             setLocationMode('gps');
+            setIsGPSMode(true); // Hook'u da güncelle
 
             // Eski manuel verileri temizle
             await clearManualData();
@@ -260,10 +266,8 @@ const AppContent: React.FC = () => {
                 country: result.cityDetail.country,
             });
 
-            // Prayer times'ı güncelle
-            if (setAllPrayerTimes) {
-                setAllPrayerTimes(result.prayerTimes);
-            }
+            // GPS prayer times hook'unu güncelle (bu kritik!)
+            setGPSPrayerTimesHook(result.prayerTimes);
 
             // Manuel konum bilgisini temizle
             setSelectedLocation({ country: null, city: null, district: null });
@@ -273,7 +277,7 @@ const AppContent: React.FC = () => {
             // GPS başarısız, method seçici göster
             setShowLocationMethodModal(true);
         }
-    }, [setAllPrayerTimes, setSelectedLocation]);
+    }, [setGPSPrayerTimesHook, setSelectedLocation, setIsGPSMode]);
 
     // GPS servisi atlandığında
     const handleGPSSkip = useCallback(async () => {
@@ -334,12 +338,16 @@ const AppContent: React.FC = () => {
             // Tam konum seçildiyse manuel moda geç
             await saveLocationMode('manual');
             setLocationMode('manual');
-            // GPS konum bilgisini temizle (görsel olarak)
+            setIsGPSMode(false); // Hook'u da güncelle
+
+            // GPS verilerini temizle (cache ve state)
+            await clearGPSData();
             setGpsLocationInfo(null);
+            setGPSPrayerTimesHook([]); // GPS hook'undaki verileri temizle
         }
 
         setIsLocationPickerOpen(false);
-    }, [selectedLocation, previousLocation]);
+    }, [selectedLocation, previousLocation, setGPSPrayerTimesHook, setIsGPSMode]);
 
     const handleOnboardingClose = async () => {
         if (onboardingStep === 1) {
@@ -361,20 +369,29 @@ const AppContent: React.FC = () => {
 
     // allPrayerTimes'ı memoize et (gereksiz yeniden render'ları önle)
     // GPS modunda gpsPrayerTimes, manuel modda allPrayerTimes kullan
+    // isGPSMode hook'tan geliyor, locationMode ise local state - hook daha güvenilir
     const memoizedPrayerTimes = useMemo(() => {
+        // Önce hook'tan gelen isGPSMode'u kontrol et
+        if (isGPSMode && gpsPrayerTimes.length > 0) {
+            return gpsPrayerTimes;
+        }
+        // Fallback: local state ile kontrol
         if (locationMode === 'gps' && gpsPrayerTimes.length > 0) {
             return gpsPrayerTimes;
         }
         return allPrayerTimes;
-    }, [locationMode, gpsPrayerTimes, allPrayerTimes]);
+    }, [isGPSMode, locationMode, gpsPrayerTimes, allPrayerTimes]);
 
     // Aktif currentDayPrayerTime - GPS modunda gpsCurrentDayPrayerTime kullan
     const activePrayerTime = useMemo(() => {
+        if (isGPSMode && gpsCurrentDayPrayerTime) {
+            return gpsCurrentDayPrayerTime;
+        }
         if (locationMode === 'gps' && gpsCurrentDayPrayerTime) {
             return gpsCurrentDayPrayerTime;
         }
         return currentDayPrayerTime;
-    }, [locationMode, gpsCurrentDayPrayerTime, currentDayPrayerTime]);
+    }, [isGPSMode, locationMode, gpsCurrentDayPrayerTime, currentDayPrayerTime]);
 
     const styles = createStyles(theme, isSmallScreen, screenWidth);
 
@@ -414,6 +431,14 @@ const AppContent: React.FC = () => {
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Namaz Vakti</Text>
                     <View style={styles.headerButtons}>
+                        <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={() => setShowQiblaCompass(true)}
+                        >
+                            <View style={styles.iconButtonInner}>
+                                <Text style={styles.iconButtonText}>🕋</Text>
+                            </View>
+                        </TouchableOpacity>
                         <TouchableOpacity
                             ref={locationButtonRef}
                             style={styles.iconButton}
@@ -607,6 +632,12 @@ const AppContent: React.FC = () => {
                     onSkip={handleGPSSkip}
                 />
 
+                {/* Qibla Compass Modal */}
+                <QiblaCompass
+                    visible={showQiblaCompass}
+                    onClose={() => setShowQiblaCompass(false)}
+                />
+
 
             </ScrollView>
             </Animated.View>
@@ -674,7 +705,7 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
             alignItems: 'center',
         },
         iconButtonText: {
-            fontSize: 20,
+            fontSize: 22,
             color: theme.colors.text, // Ensure icons are bright in dark mode
         },
         locationModalContent: {

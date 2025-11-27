@@ -129,6 +129,8 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
             hijriDate: data.hijriDateShort.split('.')[0],
             hijriMonth: data.hijriDateLong.split(' ')[1],
             hijriYear: data.hijriDateShort.split('.')[2],
+            gregorianDateLong: data.gregorianDateLong,
+            hijriDateLong: data.hijriDateLong,
         };
     };
 

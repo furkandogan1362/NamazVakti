@@ -65,14 +65,21 @@ export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
                 if (foundTz) {
                     setTimezone(foundTz);
                     await AsyncStorage.setItem(cacheKey, foundTz);
+                } else {
+                    // Bulunamadıysa cihaz timezone'unu kullan
+                    setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
                 }
             } catch (error) {
                 console.error('Error fetching timezone:', error);
+                // Hata durumunda cihaz timezone'unu kullan
+                setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
             } finally {
                 setLoading(false);
             }
         };
 
+        // Konum değiştiğinde timezone'u geçici olarak sıfırla ve yeniden fetch et
+        // Bu sayede eski timezone kullanılmaz
         fetchTimezone();
     }, [country, city, region, isOnline]);
 

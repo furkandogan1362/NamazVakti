@@ -80,6 +80,7 @@ export const useGPSPrayerTimes = () => {
     const [currentDayPrayerTime, setCurrentDayPrayerTime] = useState<PrayerTime | null>(null);
     const [_lastFetchDate, setLastFetchDate] = useState<Date | null>(null);
     const [isGPSMode, setIsGPSMode] = useState<boolean>(false);
+    const [gpsCityId, setGpsCityId] = useState<string | null>(null);
     const { isOnline } = useNetwork();
 
     // Ref to hold the latest gpsPrayerTimes
@@ -89,17 +90,62 @@ export const useGPSPrayerTimes = () => {
         gpsPrayerTimesRef.current = gpsPrayerTimes;
     }, [gpsPrayerTimes]);
 
-    // Bugünün namazını güncelle
-    const updateCurrentDayPrayerTime = useCallback(() => {
-        const today = getTurkeyDate();
+    // Konum modunu dinle ve değişiklikleri takip et
+    const checkLocationMode = useCallback(async () => {
+        const locationMode = await loadLocationMode();
+        const gpsCityInfo = await loadGPSCityInfo();
+        const newIsGPSMode = locationMode === 'gps';
+        const newCityId = gpsCityInfo?.id || null;
 
-        if (gpsPrayerTimes.length > 0) {
-            const currentDay = gpsPrayerTimes.find(pt => pt.date.split('T')[0] === today);
+        // GPS modu değiştiyse
+        if (newIsGPSMode !== isGPSMode) {
+            setIsGPSMode(newIsGPSMode);
+
+            // GPS moduna geçildiyse verileri yeniden yükle
+            if (newIsGPSMode) {
+                const cachedTimes = await loadGPSPrayerTimes();
+                if (cachedTimes && cachedTimes.length > 0) {
+                    setGpsPrayerTimes(cachedTimes);
+                }
+            }
+        }
+
+        // GPS şehri değiştiyse (yeni GPS konumu)
+        if (newIsGPSMode && newCityId && newCityId !== gpsCityId) {
+            setGpsCityId(newCityId);
+
+            // Yeni şehir için cache'den verileri yükle
+            const cachedTimes = await loadGPSPrayerTimes();
+            if (cachedTimes && cachedTimes.length > 0) {
+                setGpsPrayerTimes(cachedTimes);
+            }
+        }
+    }, [isGPSMode, gpsCityId]);
+
+    // Bugünün namazını güncelle
+    const updateCurrentDayPrayerTime = useCallback((prayerTimesData?: PrayerTime[]) => {
+        const today = getTurkeyDate();
+        const dataToUse = prayerTimesData || gpsPrayerTimes;
+
+        if (dataToUse.length > 0) {
+            const currentDay = dataToUse.find(pt => pt.date.split('T')[0] === today);
             if (currentDay) {
                 setCurrentDayPrayerTime(currentDay);
             }
         }
     }, [gpsPrayerTimes]);
+
+    // setGpsPrayerTimes için wrapper - aynı zamanda currentDayPrayerTime'ı da günceller
+    const setGpsPrayerTimesWithUpdate = useCallback((newPrayerTimes: PrayerTime[]) => {
+        setGpsPrayerTimes(newPrayerTimes);
+
+        // Hemen currentDayPrayerTime'ı da güncelle
+        const today = getTurkeyDate();
+        const currentDay = newPrayerTimes.find(pt => pt.date.split('T')[0] === today);
+        if (currentDay) {
+            setCurrentDayPrayerTime(currentDay);
+        }
+    }, []);
 
     // GPS namaz vakitlerini çek
     const fetchGPSPrayerTimes = useCallback(async (forceRefresh: boolean = false) => {
@@ -194,6 +240,15 @@ export const useGPSPrayerTimes = () => {
         initializeGPSPrayerTimes();
     }, []);
 
+    // Konum modu değişikliklerini periyodik olarak kontrol et
+    useEffect(() => {
+        const interval = setInterval(() => {
+            checkLocationMode();
+        }, 1000); // Her saniye kontrol et
+
+        return () => clearInterval(interval);
+    }, [checkLocationMode]);
+
     // Veri çekme
     useEffect(() => {
         if (isGPSMode) {
@@ -215,8 +270,9 @@ export const useGPSPrayerTimes = () => {
     return {
         gpsPrayerTimes,
         currentDayPrayerTime,
-        setGpsPrayerTimes,
+        setGpsPrayerTimes: setGpsPrayerTimesWithUpdate,
         isGPSMode,
+        setIsGPSMode,
         refreshGPSPrayerTimes: () => fetchGPSPrayerTimes(true),
     };
 };
