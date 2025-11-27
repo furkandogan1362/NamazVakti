@@ -13,7 +13,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation } from '../contexts/LocationContext';
 import { useNetwork } from '../contexts/NetworkContext';
-import { fetchPrayerTimesByLocationId } from '../api/apiService';
+import { DiyanetManuelService, PrayerTimeData } from '../api/apiDiyanetManuel';
 import {
     savePrayerTimes,
     loadPrayerTimes,
@@ -23,6 +23,36 @@ import {
     loadLastLocationId,
 } from '../services/storageService';
 import { PrayerTime } from '../types/types';
+
+// API verisini uygulama formatına dönüştür
+const transformPrayerData = (apiData: PrayerTimeData[]): PrayerTime[] => {
+    return apiData.map(item => {
+        // gregorianDateShort formatı: "27.11.2025" şeklinde geliyor
+        // Bunu "2025-11-27" formatına çeviriyoruz
+        let formattedDate = item.gregorianDateShort;
+
+        // Eğer DD.MM.YYYY formatındaysa YYYY-MM-DD'ye çevir
+        if (item.gregorianDateShort.includes('.')) {
+            const parts = item.gregorianDateShort.split('.');
+            if (parts.length === 3) {
+                formattedDate = `${parts[2]}-${parts[1]}-${parts[0]}`;
+            }
+        }
+
+        return {
+            date: formattedDate,
+            fajr: item.fajr,
+            sun: item.sunrise,
+            dhuhr: item.dhuhr,
+            asr: item.asr,
+            maghrib: item.maghrib,
+            isha: item.isha,
+            hijriDate: item.hijriDateShort,
+            gregorianDateLong: item.gregorianDateLong,  // Diyanet API'den miladi tarih
+            hijriDateLong: item.hijriDateLong,          // Diyanet API'den hicri tarih
+        };
+    });
+};
 
 // Türkiye saat diliminde bugünün tarihini al
 const getTurkeyDate = (): string => {
@@ -47,9 +77,7 @@ const hasEnoughFutureData = (prayerTimes: PrayerTime[], daysNeeded: number): boo
 
     if (todayIndex === -1) {return false;}
 
-    // Bugünden itibaren kaç gün veri var?
     const remainingDays = prayerTimes.length - todayIndex;
-
     return remainingDays >= daysNeeded;
 };
 
@@ -58,10 +86,9 @@ export const usePrayerTimes = () => {
     const [currentDayPrayerTime, setCurrentDayPrayerTime] = useState<PrayerTime | null>(null);
     const [lastFetchDate, setLastFetchDate] = useState<Date | null>(null);
     const [lastLocationId, setLastLocationId] = useState<number | null>(null);
-    const { selectedLocation, regions } = useLocation();
+    const { selectedLocation } = useLocation();
     const { isOnline } = useNetwork();
 
-    // Ref to hold the latest allPrayerTimes to avoid dependency cycles
     const allPrayerTimesRef = useRef(allPrayerTimes);
 
     useEffect(() => {
@@ -69,23 +96,26 @@ export const usePrayerTimes = () => {
     }, [allPrayerTimes]);
 
     const updateCurrentDayPrayerTime = useCallback(() => {
-        // Türkiye saat dilimine göre tarihi al (UTC+3)
         const today = getTurkeyDate();
 
         if (allPrayerTimes.length > 0) {
-            // Bugünün verilerini bul ve göster
-            const currentDay = allPrayerTimes.find(pt => pt.date.split('T')[0] === today);
+            const currentDay = allPrayerTimes.find(pt => {
+                const ptDate = pt.date.split('T')[0];
+                return ptDate === today;
+            });
 
             if (currentDay) {
                 setCurrentDayPrayerTime(currentDay);
+            } else if (allPrayerTimes.length > 0) {
+                // Fallback: bugünün verisi yoksa ilk veriyi göster
+                setCurrentDayPrayerTime(allPrayerTimes[0]);
             }
         }
     }, [allPrayerTimes]);
 
     const fetchPrayerTimes = useCallback(async () => {
-        // İnternet yoksa direkt cache'den yükle, bölge kontrolüne gerek yok
+        // İnternet yoksa direkt cache'den yükle
         if (!isOnline) {
-            // Eğer zaten veri varsa tekrar yükleme (Loop'u engelle)
             if (allPrayerTimesRef.current.length > 0) {
                 return;
             }
@@ -96,52 +126,61 @@ export const usePrayerTimes = () => {
             return;
         }
 
-        const { country, city, region } = selectedLocation;
+        // İlçe seçili değilse çıkış
+        if (!selectedLocation.district) {
+            return;
+        }
 
-        if (country && city && region && regions.length) {
-            const selectedRegionObject = regions.find(r => r.region === region);
+        const districtId = selectedLocation.district.id;
 
-            if (selectedRegionObject) {
-                // Konum değişti mi kontrol et
-                const locationChanged = lastLocationId !== null && lastLocationId !== selectedRegionObject.id;
+        // Konum değişti mi kontrol et (null ise ilk seçim demek, fetch yapmalı)
+        const isFirstSelection = lastLocationId === null;
+        const locationChanged = !isFirstSelection && lastLocationId !== districtId;
 
-                // Bugünün verisi var mı kontrol et
-                const today = getTurkeyDate();
-                const hasDataForToday = allPrayerTimesRef.current.some(pt => pt.date.split('T')[0] === today);
+        // Bugünün verisi var mı kontrol et
+        const today = getTurkeyDate();
+        const hasDataForToday = allPrayerTimesRef.current.some(pt => {
+            const ptDate = pt.date.split('T')[0];
+            return ptDate === today;
+        });
 
-                // Bugünden itibaren en az 30 gün veri var mı? (aylık görünüm için)
-                const hasEnoughData = hasEnoughFutureData(allPrayerTimesRef.current, 30);
+        // Yeterli veri var mı?
+        const hasEnoughData = hasEnoughFutureData(allPrayerTimesRef.current, 30);
 
-                // Konum değiştiyse, bugünün verisi yoksa veya yeterli veri yoksa API'den çek
-                // Cache süresi kontrolü kaldırıldı - yeterli veri varsa çekme
-                const shouldFetch = locationChanged || !hasDataForToday || !hasEnoughData;
+        // Cache'deki verilerde gregorianDateLong var mı kontrol et (eski cache için yeniden fetch)
+        const hasDateFields = allPrayerTimesRef.current.length > 0 &&
+            allPrayerTimesRef.current[0].gregorianDateLong !== undefined;
 
-                if (shouldFetch) {
-                    try {
-                        const data = await fetchPrayerTimesByLocationId(selectedRegionObject.id);
-                        setAllPrayerTimes(data);
-                        savePrayerTimes(data);
-                        const newFetchDate = new Date();
-                        setLastFetchDate(newFetchDate);
-                        saveLastFetchDate(newFetchDate);
-                        setLastLocationId(selectedRegionObject.id);
-                        saveLastLocationId(selectedRegionObject.id);
-                    } catch (error) {
-                        console.error('Error fetching prayer times, using cached data:', error);
-                        // Hata durumunda cache'den yükle
-                        const cachedTimes = await loadPrayerTimes();
-                        if (cachedTimes && cachedTimes.length > 0) {
-                            setAllPrayerTimes(cachedTimes);
-                        }
-                    }
-                } else if (!locationChanged) {
-                    // Konum değişmedi, mevcut veriyi kullan
-                    setLastLocationId(selectedRegionObject.id);
+        // İlk seçim, konum değişimi, bugünün verisi yok, yeterli veri yok veya tarih alanları eksikse fetch yap
+        const shouldFetch = isFirstSelection || locationChanged || !hasDataForToday || !hasEnoughData || !hasDateFields;
+
+        if (shouldFetch) {
+            try {
+                const apiData = await DiyanetManuelService.getPrayerTimes(districtId, 'Monthly');
+                const transformedData = transformPrayerData(apiData);
+
+                setAllPrayerTimes(transformedData);
+                savePrayerTimes(transformedData);
+
+                const newFetchDate = new Date();
+                setLastFetchDate(newFetchDate);
+                saveLastFetchDate(newFetchDate);
+
+                setLastLocationId(districtId);
+                saveLastLocationId(districtId);
+            } catch (error) {
+                console.error('Error fetching prayer times:', error);
+                const cachedTimes = await loadPrayerTimes();
+                if (cachedTimes && cachedTimes.length > 0) {
+                    setAllPrayerTimes(cachedTimes);
                 }
             }
+        } else {
+            setLastLocationId(districtId);
         }
-    }, [selectedLocation, regions, isOnline, lastLocationId]); // allPrayerTimes ve lastFetchDate bağımlılığı kaldırıldı
+    }, [selectedLocation.district, isOnline, lastLocationId]);
 
+    // Başlangıçta cache'den yükle
     useEffect(() => {
         const initializePrayerTimes = async () => {
             const savedTimes = await loadPrayerTimes();
@@ -154,16 +193,18 @@ export const usePrayerTimes = () => {
         initializePrayerTimes();
     }, []);
 
+    // Konum değiştiğinde veya veri gerektiğinde fetch
     useEffect(() => {
         fetchPrayerTimes();
     }, [fetchPrayerTimes]);
 
+    // Günün namaz vaktini güncelle
     useEffect(() => {
         updateCurrentDayPrayerTime();
 
         const interval = setInterval(() => {
             updateCurrentDayPrayerTime();
-        }, 60000); // Her dakika kontrol et
+        }, 60000);
 
         return () => clearInterval(interval);
     }, [allPrayerTimes, updateCurrentDayPrayerTime, lastFetchDate]);

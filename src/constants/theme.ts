@@ -2,7 +2,7 @@ export const COLORS = {
   dark: {
     // Modern Professional Dark Theme (Zinc/Slate based with Sky Blue accent)
     // Neutral, high contrast, easy on the eyes.
-    background: ['#09090B', '#18181B', '#27272A'], // Zinc 950 -> Zinc 900 -> Zinc 800
+    background: ['#18181B', '#1F1F23', '#27272A'], // Zinc 900 -> Custom -> Zinc 800 (daha açık)
     card: 'rgba(63, 63, 70, 0.75)', // Zinc 700 - Lighter than Zinc 800
     cardBorder: '#6B7280', // Zinc 500
     text: '#FAFAFA', // Zinc 50

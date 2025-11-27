@@ -12,9 +12,10 @@
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { LocationData, PrayerTime } from '../types/types';
+import { PlaceItem, SelectedLocation, PrayerTime } from '../types/types';
 
-export const saveLocationData = async (locationData: LocationData): Promise<void> => {
+// Seçili konum kaydet/yükle
+export const saveLocationData = async (locationData: SelectedLocation): Promise<void> => {
     try {
         await AsyncStorage.setItem('locationData', JSON.stringify(locationData));
     } catch (error) {
@@ -22,7 +23,7 @@ export const saveLocationData = async (locationData: LocationData): Promise<void
     }
 };
 
-export const loadLocationData = async (): Promise<LocationData | null> => {
+export const loadLocationData = async (): Promise<SelectedLocation | null> => {
     try {
         const savedData = await AsyncStorage.getItem('locationData');
         return savedData ? JSON.parse(savedData) : null;
@@ -87,7 +88,7 @@ export const loadLastLocationId = async (): Promise<number | null> => {
 };
 
 // Ülke listesi cache
-export const saveCountries = async (countries: string[]): Promise<void> => {
+export const saveCountries = async (countries: PlaceItem[]): Promise<void> => {
     try {
         await AsyncStorage.setItem('countries', JSON.stringify(countries));
     } catch (error) {
@@ -95,7 +96,7 @@ export const saveCountries = async (countries: string[]): Promise<void> => {
     }
 };
 
-export const loadCountries = async (): Promise<string[] | null> => {
+export const loadCountries = async (): Promise<PlaceItem[] | null> => {
     try {
         const savedCountries = await AsyncStorage.getItem('countries');
         return savedCountries ? JSON.parse(savedCountries) : null;
@@ -105,18 +106,18 @@ export const loadCountries = async (): Promise<string[] | null> => {
     }
 };
 
-// Şehir listesi cache (ülkeye göre)
-export const saveCities = async (country: string, cities: string[]): Promise<void> => {
+// Şehir listesi cache (ülke ID'sine göre)
+export const saveCities = async (countryId: number, cities: PlaceItem[]): Promise<void> => {
     try {
-        await AsyncStorage.setItem(`cities_${country}`, JSON.stringify(cities));
+        await AsyncStorage.setItem(`cities_${countryId}`, JSON.stringify(cities));
     } catch (error) {
         console.error('Error saving cities:', error);
     }
 };
 
-export const loadCities = async (country: string): Promise<string[] | null> => {
+export const loadCities = async (countryId: number): Promise<PlaceItem[] | null> => {
     try {
-        const savedCities = await AsyncStorage.getItem(`cities_${country}`);
+        const savedCities = await AsyncStorage.getItem(`cities_${countryId}`);
         return savedCities ? JSON.parse(savedCities) : null;
     } catch (error) {
         console.error('Error loading cities:', error);
@@ -124,21 +125,21 @@ export const loadCities = async (country: string): Promise<string[] | null> => {
     }
 };
 
-// Bölge listesi cache (ülke ve şehre göre)
-export const saveRegions = async (country: string, city: string, regions: any[]): Promise<void> => {
+// İlçe listesi cache (şehir ID'sine göre)
+export const saveDistricts = async (cityId: number, districts: PlaceItem[]): Promise<void> => {
     try {
-        await AsyncStorage.setItem(`regions_${country}_${city}`, JSON.stringify(regions));
+        await AsyncStorage.setItem(`districts_${cityId}`, JSON.stringify(districts));
     } catch (error) {
-        console.error('Error saving regions:', error);
+        console.error('Error saving districts:', error);
     }
 };
 
-export const loadRegions = async (country: string, city: string): Promise<any[] | null> => {
+export const loadDistricts = async (cityId: number): Promise<PlaceItem[] | null> => {
     try {
-        const savedRegions = await AsyncStorage.getItem(`regions_${country}_${city}`);
-        return savedRegions ? JSON.parse(savedRegions) : null;
+        const savedDistricts = await AsyncStorage.getItem(`districts_${cityId}`);
+        return savedDistricts ? JSON.parse(savedDistricts) : null;
     } catch (error) {
-        console.error('Error loading regions:', error);
+        console.error('Error loading districts:', error);
         return null;
     }
 };

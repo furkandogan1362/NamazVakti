@@ -13,7 +13,7 @@
  */
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, StatusBar } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, StatusBar, Animated } from 'react-native';
 import LocationModal from './components/LocationModal';
 import LocationMethodModal from './components/LocationMethodModal';
 import PrayerTimesDisplay from './components/PrayerTimesDisplay';
@@ -46,10 +46,17 @@ import {
 
 type ScreenType = 'home' | 'weekly' | 'monthly';
 
+// Görüntüleme için konum bilgisi tipi
+interface DisplayLocation {
+    country: string;
+    city: string;
+    region: string;
+}
+
 const AppContent: React.FC = () => {
     const { isOnline } = useNetwork();
     const { selectedLocation, setSelectedLocation } = useLocation();
-    const { theme, toggleTheme, isSmallScreen, screenWidth } = useTheme();
+    const { theme, toggleTheme, isSmallScreen, screenWidth, fadeAnim } = useTheme();
     const { currentDayPrayerTime, allPrayerTimes, setAllPrayerTimes } = usePrayerTimes();
     const { gpsPrayerTimes, currentDayPrayerTime: gpsCurrentDayPrayerTime, isGPSMode, refreshGPSPrayerTimes } = useGPSPrayerTimes();
     useLocationData();
@@ -59,11 +66,7 @@ const AppContent: React.FC = () => {
     const [initialCheckDone, setInitialCheckDone] = useState(false);
     const [hasCachedData, setHasCachedData] = useState(false);
     const [showOfflineModal, setShowOfflineModal] = useState(false);
-    const [previousLocation, setPreviousLocation] = useState<{
-        country: string;
-        city: string;
-        region: string;
-    } | null>(null);
+    const [previousLocation, setPreviousLocation] = useState<DisplayLocation | null>(null);
 
     // GPS Location Service state
     const [showGPSService, setShowGPSService] = useState(false);
@@ -76,6 +79,8 @@ const AppContent: React.FC = () => {
     // Location Method Modal state
     const [showLocationMethodModal, setShowLocationMethodModal] = useState(false);
     const [locationMode, setLocationMode] = useState<'gps' | 'manual' | null>(null);
+
+
 
     const themeButtonRef = React.useRef<React.ElementRef<typeof TouchableOpacity>>(null);
     const locationButtonRef = React.useRef<React.ElementRef<typeof TouchableOpacity>>(null);
@@ -116,7 +121,7 @@ const AppContent: React.FC = () => {
             }
 
             // İlk kullanıcı için konum belirleme akışı
-            const hasLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
+            const hasLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
 
             if (!hasLocation && !cachedPrayerData && !gpsCityInfo && !cachedGpsPrayerTimes) {
                 // İlk kullanıcı - konum yöntemi seçim ekranını göster (GPS mi Manuel mi?)
@@ -160,14 +165,14 @@ const AppContent: React.FC = () => {
 
     // Konum değişikliklerini takip et - TAM seçim yapılana kadar eski konumu sakla
     useEffect(() => {
-        const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
+        const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
 
-        if (hasFullLocation) {
-            // Tam konum seçildiğinde önceki konumu güncelle
+        if (hasFullLocation && selectedLocation.country && selectedLocation.city && selectedLocation.district) {
+            // Tam konum seçildiğinde önceki konumu güncelle (display format)
             setPreviousLocation({
-                country: selectedLocation.country,
-                city: selectedLocation.city,
-                region: selectedLocation.region,
+                country: selectedLocation.country.name,
+                city: selectedLocation.city.name,
+                region: selectedLocation.district.name,
             });
             setHasCachedData(true);
         }
@@ -176,7 +181,7 @@ const AppContent: React.FC = () => {
     // Modal kapandığında onboarding kontrolü
     useEffect(() => {
         if (!isLocationPickerOpen && !showGPSService) {
-            const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
+            const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
             const hasGPSLocation = gpsLocationInfo !== null && locationMode === 'gps';
 
             if (hasFullLocation || hasGPSLocation) {
@@ -261,7 +266,7 @@ const AppContent: React.FC = () => {
             }
 
             // Manuel konum bilgisini temizle
-            setSelectedLocation({ country: '', city: '', region: '' });
+            setSelectedLocation({ country: null, city: null, district: null });
 
             setHasCachedData(true);
         } else {
@@ -317,15 +322,14 @@ const AppContent: React.FC = () => {
 
     const handleCloseLocationPicker = useCallback(async () => {
         // Eğer tam konum seçilmediyse, önceki geçerli konuma geri dön
-        const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
+        const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
 
         if (!hasFullLocation) {
             if (previousLocation) {
-                setSelectedLocation(previousLocation);
-            } else {
-                // Hiçbir konum yoksa (ilk açılış) boş bırak
-                setSelectedLocation({ country: '', city: '', region: '' });
+                // previousLocation display format olduğu için cache'den yüklenmeli
+                // Ama şimdilik sadece modal'ı kapat
             }
+            // Hiçbir konum yoksa (ilk açılış) boş bırak
         } else {
             // Tam konum seçildiyse manuel moda geç
             await saveLocationMode('manual');
@@ -335,7 +339,7 @@ const AppContent: React.FC = () => {
         }
 
         setIsLocationPickerOpen(false);
-    }, [selectedLocation, previousLocation, setSelectedLocation]);
+    }, [selectedLocation, previousLocation]);
 
     const handleOnboardingClose = async () => {
         if (onboardingStep === 1) {
@@ -400,11 +404,12 @@ const AppContent: React.FC = () => {
                 backgroundColor="transparent"
                 translucent
             />
-            <ScrollView
+            <Animated.View style={[styles.animatedContainer, { opacity: fadeAnim }]}>
+                <ScrollView
 
-                contentContainerStyle={styles.container}
-                showsVerticalScrollIndicator={false}
-            >
+                    contentContainerStyle={styles.container}
+                    showsVerticalScrollIndicator={false}
+                >
                 {/* Header with theme toggle */}
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Namaz Vakti</Text>
@@ -450,15 +455,19 @@ const AppContent: React.FC = () => {
 
                 {/* Prayer Times Display - Konum bilgisi içinde */}
                 {(() => {
-                    const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.region;
+                    const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
                     const hasGPSLocation = gpsLocationInfo !== null && locationMode === 'gps';
 
                     // Eğer tam konum seçiliyse veya GPS konumu varsa veya önceki konum varsa verileri göster
                     if (activePrayerTime && (hasFullLocation || hasGPSLocation || previousLocation)) {
                         // Öncelik sırası: Manuel mod ise manuel konum, GPS mod ise GPS konum
-                        let displayLocation;
+                        let displayLocation: DisplayLocation;
                         if (locationMode === 'manual' && hasFullLocation) {
-                            displayLocation = selectedLocation;
+                            displayLocation = {
+                                country: selectedLocation.country!.name,
+                                city: selectedLocation.city!.name,
+                                region: selectedLocation.district!.name,
+                            };
                         } else if (locationMode === 'gps' && hasGPSLocation) {
                             displayLocation = {
                                 country: gpsLocationInfo.country,
@@ -466,7 +475,11 @@ const AppContent: React.FC = () => {
                                 region: gpsLocationInfo.name,
                             };
                         } else if (hasFullLocation) {
-                            displayLocation = selectedLocation;
+                            displayLocation = {
+                                country: selectedLocation.country!.name,
+                                city: selectedLocation.city!.name,
+                                region: selectedLocation.district!.name,
+                            };
                         } else if (hasGPSLocation) {
                             displayLocation = {
                                 country: gpsLocationInfo.country,
@@ -474,14 +487,14 @@ const AppContent: React.FC = () => {
                                 region: gpsLocationInfo.name,
                             };
                         } else {
-                            displayLocation = previousLocation;
+                            displayLocation = previousLocation!;
                         }
 
                         return (
                             <PrayerTimesDisplay
                                 prayerTimes={activePrayerTime}
                                 allPrayerTimes={memoizedPrayerTimes}
-                                locationInfo={displayLocation!}
+                                locationInfo={displayLocation}
                                 onWeeklyPress={handleWeeklyPress}
                                 onMonthlyPress={handleMonthlyPress}
                                 isPaused={isLocationPickerOpen || showGPSService || showLocationMethodModal}
@@ -593,7 +606,10 @@ const AppContent: React.FC = () => {
                     onComplete={handleGPSComplete}
                     onSkip={handleGPSSkip}
                 />
+
+
             </ScrollView>
+            </Animated.View>
         </GradientBackground>
     );
 };
@@ -614,6 +630,9 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
     const padding = isSmallScreen ? 10 : screenWidth < 768 ? 15 : 20;
 
     return StyleSheet.create({
+        animatedContainer: {
+            flex: 1,
+        },
         gradientContainer: {
             flex: 1,
         },

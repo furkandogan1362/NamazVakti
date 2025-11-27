@@ -16,7 +16,7 @@ interface MonthlyPrayerTimesProps {
 }
 
 const MonthlyPrayerTimes: React.FC<MonthlyPrayerTimesProps> = ({ prayerTimes, onBack }) => {
-    const { theme, isSmallScreen, screenWidth } = useTheme();
+    const { theme, isSmallScreen, screenWidth, fadeAnim: themeFadeAnim } = useTheme();
     const [lastShownDate, setLastShownDate] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const fadeAnim = useState(new Animated.Value(0))[0];
@@ -112,29 +112,30 @@ const MonthlyPrayerTimes: React.FC<MonthlyPrayerTimesProps> = ({ prayerTimes, on
             end={theme.gradientEnd}
             style={styles.container}
         >
-            <View style={styles.header}>
-                <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Text style={styles.backButtonIcon}>‹</Text>
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Aylık Namaz Vakitleri</Text>
-            </View>
-
-            {isLoading ? (
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={theme.colors.buttonBackground} />
-                    <Text style={styles.loadingText}>Yükleniyor...</Text>
+            <Animated.View style={[styles.themeAnimatedContainer, { opacity: themeFadeAnim }]}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                        <Text style={styles.backButtonIcon}>‹</Text>
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>Aylık Namaz Vakitleri</Text>
                 </View>
-            ) : (
-                <Animated.View
-                    style={[
-                        styles.contentContainer,
-                        {
-                            opacity: fadeAnim,
-                            transform: [{translateY: slideAnim}],
-                        },
-                    ]}
-                >
-                    <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
+
+                {isLoading ? (
+                    <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="large" color={theme.colors.buttonBackground} />
+                        <Text style={styles.loadingText}>Yükleniyor...</Text>
+                    </View>
+                ) : (
+                    <Animated.View
+                        style={[
+                            styles.contentContainer,
+                            {
+                                opacity: fadeAnim,
+                                transform: [{translateY: slideAnim}],
+                            },
+                        ]}
+                    >
+                        <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
                 {monthlyData.map((day, index) => {
                     const isToday = index === 0;
                     return (
@@ -187,6 +188,7 @@ const MonthlyPrayerTimes: React.FC<MonthlyPrayerTimesProps> = ({ prayerTimes, on
                     </ScrollView>
                 </Animated.View>
             )}
+            </Animated.View>
         </LinearGradient>
     );
 };
@@ -196,6 +198,9 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
 
     return StyleSheet.create({
         container: {
+            flex: 1,
+        },
+        themeAnimatedContainer: {
             flex: 1,
         },
         header: {

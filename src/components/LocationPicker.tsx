@@ -3,7 +3,8 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'rea
 import { Picker } from '@react-native-picker/picker';
 import { useLocation } from '../contexts/LocationContext';
 import { useTheme } from '../contexts/ThemeContext';
-import { fetchCountries } from '../api/apiService';
+import { DiyanetManuelService } from '../api/apiDiyanetManuel';
+import { PlaceItem } from '../types/types';
 
 interface LocationPickerProps {
     onClose: () => void;
@@ -13,7 +14,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
     const {
         countries,
         cities,
-        regions,
+        districts,
         selectedLocation,
         setSelectedLocation,
         setCountries,
@@ -26,7 +27,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
         setLoading(true);
         setError('');
         try {
-            const data = await fetchCountries();
+            const data = await DiyanetManuelService.getCountries();
             setCountries(data);
         } catch (err) {
             setError('Veriler yüklenirken bir hata oluştu.');
@@ -42,20 +43,53 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const handleCountryChange = (countryId: string) => {
+        if (!countryId) {
+            setSelectedLocation({ country: null, city: null, district: null });
+            return;
+        }
+        const country = countries.find(c => c.id.toString() === countryId);
+        if (country) {
+            setSelectedLocation({ country, city: null, district: null });
+        }
+    };
+
+    const handleCityChange = (cityId: string) => {
+        if (!cityId) {
+            setSelectedLocation({ ...selectedLocation, city: null, district: null });
+            return;
+        }
+        const city = cities.find(c => c.id.toString() === cityId);
+        if (city) {
+            setSelectedLocation({ ...selectedLocation, city, district: null });
+        }
+    };
+
+    const handleDistrictChange = (districtId: string) => {
+        if (!districtId) {
+            setSelectedLocation({ ...selectedLocation, district: null });
+            return;
+        }
+        const district = districts.find(d => d.id.toString() === districtId);
+        if (district) {
+            setSelectedLocation({ ...selectedLocation, district });
+        }
+    };
+
     const handleConfirmLocation = () => {
-        if (selectedLocation.country && selectedLocation.city && selectedLocation.region) {
+        if (selectedLocation.country && selectedLocation.city && selectedLocation.district) {
             onClose();
         }
     };
 
     const styles = useMemo(() => createStyles(theme, isSmallScreen, screenWidth), [theme, isSmallScreen, screenWidth]);
 
-    // Memoize picker items to prevent unnecessary re-renders of large lists
+    // Memoize picker items
     const countryItems = useMemo(() => {
         return [
             <Picker.Item key="default" label="Ülke Seçiniz" value="" />,
-            ...countries.map((country) => (
-                <Picker.Item key={country} label={country} value={country} />
+            ...countries.map((country: PlaceItem) => (
+                <Picker.Item key={country.id} label={country.name} value={country.id.toString()} />
             )),
         ];
     }, [countries]);
@@ -63,27 +97,20 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
     const cityItems = useMemo(() => {
         return [
             <Picker.Item key="default" label="Şehir Seçiniz" value="" />,
-            ...cities.map((city) => (
-                <Picker.Item key={city} label={city} value={city} />
+            ...cities.map((city: PlaceItem) => (
+                <Picker.Item key={city.id} label={city.name} value={city.id.toString()} />
             )),
         ];
     }, [cities]);
 
-    const regionItems = useMemo(() => {
+    const districtItems = useMemo(() => {
         return [
             <Picker.Item key="default" label="İlçe Seçiniz" value="" />,
-            ...regions.map((region) => {
-                const displayName = region.region || selectedLocation.city;
-                return (
-                    <Picker.Item
-                        key={region.id}
-                        label={displayName}
-                        value={displayName}
-                    />
-                );
-            }),
+            ...districts.map((district: PlaceItem) => (
+                <Picker.Item key={district.id} label={district.name} value={district.id.toString()} />
+            )),
         ];
-    }, [regions, selectedLocation.city]);
+    }, [districts]);
 
     if (loading) {
         return (
@@ -122,9 +149,8 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                 <Text style={styles.label}>Ülke</Text>
                 <View style={styles.pickerWrapper}>
                     <Picker
-                        selectedValue={selectedLocation.country}
-                        onValueChange={(country: string) =>
-                            setSelectedLocation({...selectedLocation, country, city: '', region: ''})}
+                        selectedValue={selectedLocation.country?.id.toString() || ''}
+                        onValueChange={handleCountryChange}
                         style={styles.picker}
                         dropdownIconColor={theme.colors.text}
                     >
@@ -137,9 +163,8 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                 <Text style={styles.label}>Şehir</Text>
                 <View style={[styles.pickerWrapper, !selectedLocation.country && styles.disabledPicker]}>
                     <Picker
-                        selectedValue={selectedLocation.city}
-                        onValueChange={(city: string) =>
-                            setSelectedLocation({...selectedLocation, city, region: ''})}
+                        selectedValue={selectedLocation.city?.id.toString() || ''}
+                        onValueChange={handleCityChange}
                         style={styles.picker}
                         enabled={!!selectedLocation.country}
                         dropdownIconColor={theme.colors.text}
@@ -153,19 +178,18 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                 <Text style={styles.label}>İlçe</Text>
                 <View style={[styles.pickerWrapper, !selectedLocation.city && styles.disabledPicker]}>
                     <Picker
-                        selectedValue={selectedLocation.region}
-                        onValueChange={(region: string) =>
-                            setSelectedLocation({...selectedLocation, region})}
+                        selectedValue={selectedLocation.district?.id.toString() || ''}
+                        onValueChange={handleDistrictChange}
                         style={styles.picker}
                         enabled={!!selectedLocation.city}
                         dropdownIconColor={theme.colors.text}
                     >
-                        {regionItems}
+                        {districtItems}
                     </Picker>
                 </View>
             </View>
 
-            {selectedLocation.country && selectedLocation.city && selectedLocation.region && (
+            {selectedLocation.country && selectedLocation.city && selectedLocation.district && (
                 <TouchableOpacity
                     style={styles.confirmButton}
                     onPress={handleConfirmLocation}

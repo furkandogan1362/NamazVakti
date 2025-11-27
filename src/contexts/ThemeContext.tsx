@@ -4,8 +4,8 @@
  * Gradient arka planlar ve uyumlu renk paletleri içerir
  */
 
-import React, { createContext, useState, useContext, useEffect } from 'react';
-import { Dimensions, useColorScheme, LayoutAnimation, Platform, UIManager } from 'react-native';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
+import { Dimensions, useColorScheme, Animated, Platform, UIManager } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { COLORS } from '../constants/theme';
 
@@ -107,6 +107,8 @@ interface ThemeContextType {
     isSmallScreen: boolean;
     isMediumScreen: boolean;
     isLargeScreen: boolean;
+    isTransitioning: boolean;
+    fadeAnim: Animated.Value;
 }
 
 const ThemeContext = createContext<ThemeContextType>({
@@ -117,12 +119,16 @@ const ThemeContext = createContext<ThemeContextType>({
     isSmallScreen: false,
     isMediumScreen: false,
     isLargeScreen: false,
+    isTransitioning: false,
+    fadeAnim: new Animated.Value(1),
 });
 
 export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
     const systemScheme = useColorScheme();
     const [themeType, setThemeType] = useState<ThemeType>(systemScheme === 'dark' ? 'dark' : 'light');
     const [dimensions, setDimensions] = useState(Dimensions.get('window'));
+    const [isTransitioning, setIsTransitioning] = useState(false);
+    const fadeAnim = useRef(new Animated.Value(1)).current;
 
     // Tema tercihini yükle
     useEffect(() => {
@@ -150,9 +156,28 @@ export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children 
     }, []);
 
     const toggleTheme = async () => {
-        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         const newTheme = themeType === 'light' ? 'dark' : 'light';
-        setThemeType(newTheme);
+
+        // Fade out animasyonu başlat
+        setIsTransitioning(true);
+        Animated.timing(fadeAnim, {
+            toValue: 0,
+            duration: 150,
+            useNativeDriver: true,
+        }).start(() => {
+            // Tema değiştir
+            setThemeType(newTheme);
+
+            // Fade in animasyonu
+            Animated.timing(fadeAnim, {
+                toValue: 1,
+                duration: 150,
+                useNativeDriver: true,
+            }).start(() => {
+                setIsTransitioning(false);
+            });
+        });
+
         try {
             await AsyncStorage.setItem('themePreference', newTheme);
         } catch (error) {
@@ -178,6 +203,8 @@ export const ThemeProvider: React.FC<{children: React.ReactNode}> = ({ children 
             isSmallScreen,
             isMediumScreen,
             isLargeScreen,
+            isTransitioning,
+            fadeAnim,
         }}>
             {children}
         </ThemeContext.Provider>

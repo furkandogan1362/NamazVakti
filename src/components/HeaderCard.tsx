@@ -48,50 +48,9 @@ const HeaderCard: React.FC<HeaderCardProps> = ({ locationInfo, prayerTimes, isPa
         return () => clearInterval(interval);
     }, [isPaused, timezone]);
 
-    // Tarih ve gün bilgisi (Türkiye saat dilimi)
-    const formatDate = () => {
-        const dateStr = prayerTimes.date.split('T')[0];
-        const [year, month, day] = dateStr.split('-').map(Number);
-        const date = new Date(year, month - 1, day);
-
-        const days = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
-        const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran',
-            'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
-
-        const dayName = days[date.getDay()];
-        const fullDate = `${day} ${months[month - 1]} ${year}`;
-
-        return { dayName, fullDate };
-    };
-
-    // Hicri takvim hesaplama
-    const getHijriDate = () => {
-        const dateStr = prayerTimes.date.split('T')[0];
-        const [year, month, day] = dateStr.split('-').map(Number);
-
-        let a = Math.floor((14 - month) / 12);
-        let y = year + 4800 - a;
-        let m = month + (12 * a) - 3;
-        let jd = day + Math.floor((153 * m + 2) / 5) + (365 * y) + Math.floor(y / 4) - Math.floor(y / 100) + Math.floor(y / 400) - 32045;
-
-        let l = jd - 1948440 + 10632;
-        let n = Math.floor((l - 1) / 10631);
-        l = l - 10631 * n + 354;
-        let j = (Math.floor((10985 - l) / 5316)) * (Math.floor((50 * l) / 17719)) + (Math.floor(l / 5670)) * (Math.floor((43 * l) / 15238));
-        l = l - (Math.floor((30 - j) / 15)) * (Math.floor((17719 * j) / 50)) - (Math.floor(j / 16)) * (Math.floor((15238 * j) / 43)) + 29;
-
-        let hijriMonth = Math.floor((24 * l) / 709);
-        let hijriDay = l - Math.floor((709 * hijriMonth) / 24);
-        let hijriYear = 30 * n + j - 30;
-
-        const hijriMonths = ['Muharrem', 'Safer', 'Rebiülevvel', 'Rebiülahir', 'Cemaziyelevvel',
-            'Cemaziyelahir', 'Recep', 'Şaban', 'Ramazan', 'Şevval', 'Zilkade', 'Zilhicce'];
-
-        return `${hijriDay} ${hijriMonths[hijriMonth - 1]} ${hijriYear}`;
-    };
-
-    const { fullDate } = formatDate();
-    const hijriDate = getHijriDate();
+    // Diyanet API'den gelen miladi ve hicri tarihleri kullan
+    const gregorianDate = prayerTimes.gregorianDateLong || '';
+    const hijriDate = prayerTimes.hijriDateLong || '';
     const styles = createStyles(theme, isSmallScreen, screenWidth);
 
     return (
@@ -103,7 +62,7 @@ const HeaderCard: React.FC<HeaderCardProps> = ({ locationInfo, prayerTimes, isPa
                 </View>
                 <View style={styles.dateContainer}>
                     <Text style={styles.timeText}>{currentTime}</Text>
-                    <Text style={styles.dateText}>{fullDate}</Text>
+                    <Text style={styles.dateText}>{gregorianDate}</Text>
                     <Text style={styles.hijriText}>{hijriDate}</Text>
                 </View>
             </View>

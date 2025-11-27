@@ -5,57 +5,63 @@
  * Bu context, kullanıcının seçtiği konum bilgilerini ve ilgili durumları yönetir.
  * Konum verilerini tüm uygulama bileşenlerine sağlar.
  * Yönetilen veriler:
- * - Ülkeler, şehirler ve bölgeler listesi
- * - Seçili konum bilgileri
+ * - Ülkeler, şehirler ve ilçeler listesi (PlaceItem formatında)
+ * - Seçili konum bilgileri (ID'ler dahil)
  * - Konum seçim durumu
  */
 
 import React, { createContext, useState, useContext } from 'react';
-import { LocationData, Region } from '../types/types';
+import { PlaceItem, SelectedLocation } from '../types/types';
 
 interface LocationContextType {
-    countries: string[];
-    cities: string[];
-    regions: Region[];
-    selectedLocation: LocationData;
+    countries: PlaceItem[];
+    cities: PlaceItem[];
+    districts: PlaceItem[];
+    selectedLocation: SelectedLocation;
     isSelectingLocation: boolean;
-    setCountries: (countries: string[]) => void;
-    setCities: (cities: string[]) => void;
-    setRegions: (regions: Region[]) => void;
-    setSelectedLocation: (location: LocationData) => void;
+    setCountries: (countries: PlaceItem[]) => void;
+    setCities: (cities: PlaceItem[]) => void;
+    setDistricts: (districts: PlaceItem[]) => void;
+    setSelectedLocation: (location: SelectedLocation) => void;
     setIsSelectingLocation: (isSelecting: boolean) => void;
 }
+
+const defaultSelectedLocation: SelectedLocation = {
+    country: null,
+    city: null,
+    district: null,
+};
 
 const LocationContext = createContext<LocationContextType>({
     countries: [],
     cities: [],
-    regions: [],
-    selectedLocation: { country: '', city: '', region: '' },
+    districts: [],
+    selectedLocation: defaultSelectedLocation,
     isSelectingLocation: true,
     setCountries: () => {},
     setCities: () => {},
-    setRegions: () => {},
+    setDistricts: () => {},
     setSelectedLocation: () => {},
     setIsSelectingLocation: () => {},
 });
 
 export const LocationProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
-    const [countries, setCountries] = useState<string[]>([]);
-    const [cities, setCities] = useState<string[]>([]);
-    const [regions, setRegions] = useState<Region[]>([]);
-    const [selectedLocation, setSelectedLocation] = useState<LocationData>({ country: '', city: '', region: '' });
+    const [countries, setCountries] = useState<PlaceItem[]>([]);
+    const [cities, setCities] = useState<PlaceItem[]>([]);
+    const [districts, setDistricts] = useState<PlaceItem[]>([]);
+    const [selectedLocation, setSelectedLocation] = useState<SelectedLocation>(defaultSelectedLocation);
     const [isSelectingLocation, setIsSelectingLocation] = useState(true);
 
     return (
         <LocationContext.Provider value={{
             countries,
             cities,
-            regions,
+            districts,
             selectedLocation,
             isSelectingLocation,
             setCountries,
             setCities,
-            setRegions,
+            setDistricts,
             setSelectedLocation,
             setIsSelectingLocation,
         }}>

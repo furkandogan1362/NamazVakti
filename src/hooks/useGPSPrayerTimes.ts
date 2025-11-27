@@ -37,6 +37,8 @@ const convertToPrayerTime = (data: any): PrayerTime => {
         hijriDate: data.hijriDateShort.split('.')[0],
         hijriMonth: data.hijriDateLong.split(' ')[1],
         hijriYear: data.hijriDateShort.split('.')[2],
+        gregorianDateLong: data.gregorianDateLong,  // Diyanet API'den miladi tarih
+        hijriDateLong: data.hijriDateLong,          // Diyanet API'den hicri tarih
     };
 };
 
@@ -135,9 +137,13 @@ export const useGPSPrayerTimes = () => {
         // Bugünden itibaren en az 30 gün veri var mı? (aylık görünüm için)
         const hasEnoughData = hasEnoughFutureData(gpsPrayerTimesRef.current, 30);
 
+        // Cache'deki verilerde gregorianDateLong var mı kontrol et (eski cache için yeniden fetch)
+        const hasDateFields = gpsPrayerTimesRef.current.length > 0 &&
+            gpsPrayerTimesRef.current[0].gregorianDateLong !== undefined;
+
         // Veri çekme gerekli mi?
-        // Bugünün verisi ve yeterli ileri tarih verisi varsa çekme
-        const shouldFetch = forceRefresh || !hasDataForToday || !hasEnoughData;
+        // Bugünün verisi ve yeterli ileri tarih verisi varsa çekme, tarih alanları eksikse çek
+        const shouldFetch = forceRefresh || !hasDataForToday || !hasEnoughData || !hasDateFields;
 
         if (shouldFetch) {
             try {

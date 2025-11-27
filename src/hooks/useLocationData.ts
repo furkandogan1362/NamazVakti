@@ -5,14 +5,14 @@
  * Bu hook, konum verilerinin API'den yüklenmesi ve yerel depolamadan
  * alınması işlemlerini yönetir.
  * İşlevler:
- * - Ülke, şehir ve bölge listelerini yükler
+ * - Ülke, şehir ve ilçe listelerini yükler
  * - Kaydedilmiş konum verilerini geri yükler
  * - Konum değişikliklerini takip eder ve gerekli güncellemeleri yapar
  */
 import { useEffect } from 'react';
 import { useLocation } from '../contexts/LocationContext';
 import { useNetwork } from '../contexts/NetworkContext';
-import { fetchCountries, fetchCities, fetchRegions } from '../api/apiService';
+import { DiyanetManuelService } from '../api/apiDiyanetManuel';
 import {
     loadLocationData,
     saveLocationData,
@@ -20,25 +20,26 @@ import {
     loadCountries,
     saveCities,
     loadCities,
-    saveRegions,
-    loadRegions,
+    saveDistricts,
+    loadDistricts,
 } from '../services/storageService';
 
 export const useLocationData = () => {
     const {
         setCountries,
         setCities,
-        setRegions,
+        setDistricts,
         setSelectedLocation,
         setIsSelectingLocation,
         selectedLocation,
     } = useLocation();
     const { isOnline } = useNetwork();
 
+    // Uygulama başlangıcında kaydedilmiş konumu yükle
     useEffect(() => {
         const initializeLocationData = async () => {
             const savedLocation = await loadLocationData();
-            if (savedLocation) {
+            if (savedLocation && savedLocation.district) {
                 setSelectedLocation(savedLocation);
                 setIsSelectingLocation(false);
             }
@@ -46,6 +47,7 @@ export const useLocationData = () => {
         initializeLocationData();
     }, [setSelectedLocation, setIsSelectingLocation]);
 
+    // Ülkeleri yükle
     useEffect(() => {
         const loadCountriesData = async () => {
             // Stale-while-revalidate: Önce cache'i göster
@@ -57,23 +59,25 @@ export const useLocationData = () => {
             // Arka planda API'den güncelle (sadece online ise)
             if (isOnline) {
                 try {
-                    const freshData = await fetchCountries();
+                    const freshData = await DiyanetManuelService.getCountries();
                     setCountries(freshData);
                     saveCountries(freshData);
                 } catch (error) {
                     console.error('Error loading countries:', error);
-                    // Hata durumunda cache kullanılıyor (zaten yukarıda set edildi)
                 }
             }
         };
         loadCountriesData();
     }, [isOnline, setCountries]);
 
+    // Şehirleri yükle (ülke seçildiğinde)
     useEffect(() => {
         const loadCitiesData = async () => {
             if (selectedLocation.country) {
+                const countryId = selectedLocation.country.id;
+
                 // Stale-while-revalidate: Önce cache'i göster
-                const cachedCities = await loadCities(selectedLocation.country);
+                const cachedCities = await loadCities(countryId);
                 if (cachedCities && cachedCities.length > 0) {
                     setCities(cachedCities);
                 }
@@ -81,35 +85,36 @@ export const useLocationData = () => {
                 // Arka planda API'den güncelle (sadece online ise)
                 if (isOnline) {
                     try {
-                        const freshData = await fetchCities(selectedLocation.country);
+                        const freshData = await DiyanetManuelService.getStates(countryId);
                         setCities(freshData);
-                        saveCities(selectedLocation.country, freshData);
+                        saveCities(countryId, freshData);
                     } catch (error) {
                         console.error('Error loading cities:', error);
                     }
                 }
+            } else {
+                setCities([]);
             }
         };
         loadCitiesData();
     }, [selectedLocation.country, isOnline, setCities]);
 
+    // İlçeleri yükle (şehir seçildiğinde)
     useEffect(() => {
-        const loadRegionsData = async () => {
-            if (selectedLocation.country && selectedLocation.city) {
-                // Stale-while-revalidate: Önce cache'i göster
-                const cachedRegions = await loadRegions(selectedLocation.country, selectedLocation.city);
-                if (cachedRegions && cachedRegions.length > 0) {
-                    const processedCached = cachedRegions.map(region => ({
-                        ...region,
-                        region: region.region || selectedLocation.city,
-                    }));
-                    setRegions(processedCached);
+        const loadDistrictsData = async () => {
+            if (selectedLocation.city) {
+                const cityId = selectedLocation.city.id;
 
-                    // Cache'den yüklendiğinde otomatik seçim yap
-                    if (processedCached.length === 1 && !selectedLocation.region) {
+                // Stale-while-revalidate: Önce cache'i göster
+                const cachedDistricts = await loadDistricts(cityId);
+                if (cachedDistricts && cachedDistricts.length > 0) {
+                    setDistricts(cachedDistricts);
+
+                    // Tek ilçe varsa otomatik seç
+                    if (cachedDistricts.length === 1 && !selectedLocation.district) {
                         setSelectedLocation({
                             ...selectedLocation,
-                            region: processedCached[0].region,
+                            district: cachedDistricts[0],
                         });
                     }
                 }
@@ -117,37 +122,32 @@ export const useLocationData = () => {
                 // Arka planda API'den güncelle (sadece online ise)
                 if (isOnline) {
                     try {
-                        const freshData = await fetchRegions(selectedLocation.country, selectedLocation.city);
+                        const freshData = await DiyanetManuelService.getDistricts(cityId);
+                        setDistricts(freshData);
+                        saveDistricts(cityId, freshData);
 
-                        if (freshData && freshData.length > 0) {
-                            const processedData = freshData.map(region => ({
-                                ...region,
-                                region: region.region || selectedLocation.city,
-                            }));
-
-                            setRegions(processedData);
-                            saveRegions(selectedLocation.country, selectedLocation.city, processedData);
-
-                            // API'den yeni veri geldiğinde otomatik seçim yap
-                            if (processedData.length === 1 && !selectedLocation.region) {
-                                setSelectedLocation({
-                                    ...selectedLocation,
-                                    region: processedData[0].region,
-                                });
-                            }
+                        // Tek ilçe varsa otomatik seç
+                        if (freshData.length === 1 && !selectedLocation.district) {
+                            setSelectedLocation({
+                                ...selectedLocation,
+                                district: freshData[0],
+                            });
                         }
                     } catch (error) {
-                        console.error('Error loading regions:', error);
+                        console.error('Error loading districts:', error);
                     }
                 }
+            } else {
+                setDistricts([]);
             }
         };
-        loadRegionsData();
+        loadDistrictsData();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedLocation.country, selectedLocation.city, isOnline, setRegions, setSelectedLocation]);
+    }, [selectedLocation.city, isOnline, setDistricts]);
 
+    // Konum tam seçildiğinde kaydet
     useEffect(() => {
-        if (selectedLocation.country && selectedLocation.city && selectedLocation.region) {
+        if (selectedLocation.country && selectedLocation.city && selectedLocation.district) {
             saveLocationData(selectedLocation);
         }
     }, [selectedLocation]);
