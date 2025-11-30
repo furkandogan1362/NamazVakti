@@ -205,8 +205,8 @@ const createStyles = (theme: any, isSmallScreen: boolean, screenWidth: number) =
         },
         header: {
             paddingHorizontal: padding,
-            paddingTop: 50,
-            paddingBottom: 20,
+            paddingTop: isSmallScreen ? 40 : 18,
+            paddingBottom: isSmallScreen ? 15 : 18,
             flexDirection: 'row',
             alignItems: 'center',
         },

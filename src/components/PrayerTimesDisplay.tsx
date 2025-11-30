@@ -8,9 +8,10 @@
  * - Tüm namaz vakitlerini görüntüler
  * - Aktif namaz vaktini belirler ve vurgular
  * - NextPrayerTime bileşenini entegre eder
+ * - Vakit değişimlerini anlık olarak takip eder
  */
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Fontisto from 'react-native-vector-icons/Fontisto';
 import { PrayerTime } from '../types/types';
@@ -45,6 +46,7 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
 }) => {
     const { theme, isSmallScreen, screenWidth } = useTheme();
     const { timezone } = useLocationTime(locationInfo);
+    const [currentPrayer, setCurrentPrayer] = useState<PrayerKey>('fajr');
 
     const prayerNames: Record<PrayerKey, string> = {
         fajr: 'İmsak',
@@ -64,7 +66,7 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
         isha: 'night-clear',
     };
 
-    const getCurrentPrayer = (): PrayerKey => {
+    const getCurrentPrayer = useCallback((): PrayerKey => {
         const now = new Date();
         let currentMinutes;
 
@@ -106,9 +108,20 @@ const PrayerTimesDisplay: React.FC<PrayerTimesDisplayProps> = ({
         if (currentMinutes < times.maghrib) { return 'asr'; }
         if (currentMinutes < times.isha) { return 'maghrib'; }
         return 'isha';
-    };
+    }, [prayerTimes, timezone]);
 
-    const currentPrayer = getCurrentPrayer();
+    // Aktif namaz vaktini her saniye güncelle
+    useEffect(() => {
+        // İlk değeri hemen hesapla
+        setCurrentPrayer(getCurrentPrayer());
+
+        // Her saniye güncelle
+        const interval = setInterval(() => {
+            setCurrentPrayer(getCurrentPrayer());
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [getCurrentPrayer]);
     const styles = createStyles(theme, isSmallScreen, screenWidth);
 
     return (

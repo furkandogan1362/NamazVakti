@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import { useLocation } from '../contexts/LocationContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { DiyanetManuelService } from '../api/apiDiyanetManuel';
+import { loadLastLocationId, loadGPSCityInfo } from '../services/storageService';
 import { PlaceItem } from '../types/types';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
+import GlassView from './ui/GlassView';
 
 interface LocationPickerProps {
     onClose: () => void;
@@ -22,6 +25,35 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
     const { theme, isSmallScreen, screenWidth } = useTheme();
     const [loading, setLoading] = useState(countries.length === 0);
     const [error, setError] = useState('');
+    const [showSameLocationModal, setShowSameLocationModal] = useState(false);
+    const [sameLocationName, setSameLocationName] = useState('');
+    
+    // Modal açıldığında mevcut cache'deki ID'leri sakla (bir kez)
+    const [initialCachedIds, setInitialCachedIds] = useState<{
+        manualId: number | null;
+        gpsId: number | null;
+    } | null>(null);
+
+    // Component mount olduğunda cache'deki ID'leri oku
+    useEffect(() => {
+        const loadInitialCachedIds = async () => {
+            const cachedManualLocationId = await loadLastLocationId();
+            const cachedGPSCityInfo = await loadGPSCityInfo();
+            const cachedGPSLocationId = cachedGPSCityInfo ? parseInt(cachedGPSCityInfo.id, 10) : null;
+            
+            setInitialCachedIds({
+                manualId: cachedManualLocationId,
+                gpsId: cachedGPSLocationId,
+            });
+            
+            console.log('🔒 Başlangıç cache ID\'leri kaydedildi:', {
+                manualId: cachedManualLocationId,
+                gpsId: cachedGPSLocationId,
+            });
+        };
+        
+        loadInitialCachedIds();
+    }, []);
 
     const loadCountries = async () => {
         setLoading(true);
@@ -76,10 +108,49 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
         }
     };
 
-    const handleConfirmLocation = () => {
+    const handleConfirmLocation = async () => {
         if (selectedLocation.country && selectedLocation.city && selectedLocation.district) {
+            const selectedDistrictId = selectedLocation.district.id;
+            
+            // Başlangıçta kaydedilen cache ID'lerini kullan (güncellenmiş değil!)
+            if (!initialCachedIds) {
+                // Henüz yüklenmemişse, yeni konum olarak kabul et
+                console.log('🔄 Yeni manuel konum seçildi (cache henüz yüklenmedi):', selectedLocation.district.name);
+                onClose();
+                return;
+            }
+            
+            // Seçilen ID, BAŞLANGIÇTA kaydedilen herhangi bir cache ID ile aynı mı?
+            const isSameAsManual = initialCachedIds.manualId !== null && initialCachedIds.manualId === selectedDistrictId;
+            const isSameAsGPS = initialCachedIds.gpsId !== null && initialCachedIds.gpsId === selectedDistrictId;
+            const isSameLocation = isSameAsManual || isSameAsGPS;
+            
+            console.log('🔍 Konum karşılaştırması (başlangıç değerleri ile):', {
+                selectedDistrictId,
+                initialManualId: initialCachedIds.manualId,
+                initialGPSId: initialCachedIds.gpsId,
+                isSameAsManual,
+                isSameAsGPS,
+                isSameLocation,
+            });
+            
+            // Herhangi bir cache'de aynı ID varsa modal göster
+            if (isSameLocation) {
+                console.log('📍 Aynı konum seçildi, API isteği yapılmıyor:', selectedLocation.district.name);
+                setSameLocationName(selectedLocation.district.name);
+                setShowSameLocationModal(true);
+                return;
+            }
+            
+            // Farklı konum seçildi, modal kapat ve usePrayerTimes hook'u API'yi çağıracak
+            console.log('🔄 Yeni manuel konum seçildi:', selectedLocation.district.name);
             onClose();
         }
+    };
+
+    const handleSameLocationModalClose = () => {
+        setShowSameLocationModal(false);
+        onClose();
     };
 
     const styles = useMemo(() => createStyles(theme, isSmallScreen, screenWidth), [theme, isSmallScreen, screenWidth]);
@@ -199,6 +270,37 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                     </View>
                 </TouchableOpacity>
             )}
+
+            {/* Aynı Konum Modalı */}
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={showSameLocationModal}
+                onRequestClose={handleSameLocationModalClose}
+            >
+                <View style={styles.modalOverlay}>
+                    <GlassView style={styles.sameLocationModal} autoHeight={true} overlayOpacity={0.95}>
+                        <View style={styles.sameLocationModalInner}>
+                            <View style={styles.sameLocationIconContainer}>
+                                <MaterialIcons name="location-on" size={40} color={theme.colors.accent} />
+                            </View>
+                            <Text style={styles.sameLocationTitle}>Aynı Konum</Text>
+                            <Text style={styles.sameLocationMessage}>
+                                Zaten <Text style={styles.sameLocationHighlight}>{sameLocationName}</Text> konumundasınız.
+                            </Text>
+                            <Text style={styles.sameLocationSubMessage}>
+                                Mevcut namaz vakitleri kullanılmaya devam edecek.
+                            </Text>
+                            <TouchableOpacity
+                                style={styles.sameLocationButton}
+                                onPress={handleSameLocationModalClose}
+                            >
+                                <Text style={styles.sameLocationButtonText}>Tamam</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </GlassView>
+                </View>
+            </Modal>
         </View>
     );
 };
@@ -291,6 +393,70 @@ const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number)
             color: theme.colors.text,
             fontSize: 16,
             fontWeight: 'bold',
+        },
+        // Aynı Konum Modal Stilleri
+        modalOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+        },
+        sameLocationModal: {
+            borderRadius: 20,
+            width: '90%',
+            maxWidth: 350,
+        },
+        sameLocationModalInner: {
+            padding: 25,
+            alignItems: 'center',
+        },
+        sameLocationIconContainer: {
+            width: 70,
+            height: 70,
+            borderRadius: 35,
+            backgroundColor: theme.colors.accent + '20',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 16,
+        },
+        sameLocationTitle: {
+            fontSize: 20,
+            fontWeight: 'bold',
+            color: theme.colors.text,
+            marginBottom: 12,
+            textAlign: 'center',
+        },
+        sameLocationMessage: {
+            fontSize: 15,
+            color: theme.colors.secondaryText,
+            textAlign: 'center',
+            lineHeight: 22,
+            marginBottom: 8,
+        },
+        sameLocationHighlight: {
+            color: theme.colors.accent,
+            fontWeight: 'bold',
+        },
+        sameLocationSubMessage: {
+            fontSize: 13,
+            color: theme.colors.secondaryText,
+            textAlign: 'center',
+            marginBottom: 20,
+            opacity: 0.8,
+        },
+        sameLocationButton: {
+            backgroundColor: theme.colors.accent,
+            paddingVertical: 12,
+            paddingHorizontal: 40,
+            borderRadius: 25,
+            minWidth: 140,
+        },
+        sameLocationButtonText: {
+            color: '#FFFFFF',
+            fontSize: 16,
+            fontWeight: 'bold',
+            textAlign: 'center',
         },
     });
 };

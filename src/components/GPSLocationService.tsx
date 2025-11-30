@@ -30,6 +30,7 @@ import Geolocation from 'react-native-geolocation-service';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../contexts/ThemeContext';
 import { DiyanetService, CityDetail, PrayerTimeData } from '../api/apiDiyanet';
+import { loadGPSCityInfo, loadGPSPrayerTimes, loadLastLocationId, loadPrayerTimes } from '../services/storageService';
 import GlassView from './ui/GlassView';
 import { PrayerTime } from '../types/types';
 
@@ -48,7 +49,7 @@ interface GPSLocationServiceProps {
     onSkip: () => void;
 }
 
-type PermissionStatus = 'checking' | 'requesting' | 'denied' | 'blocked' | 'loading_location' | 'loading_data' | 'error' | 'success';
+type PermissionStatus = 'checking' | 'requesting' | 'denied' | 'blocked' | 'loading_location' | 'loading_data' | 'checking_cache' | 'same_location' | 'error' | 'success';
 
 const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
     visible,
@@ -260,7 +261,59 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
             if (cityDetail) {
                 setLocationName(`${cityDetail.name}, ${cityDetail.city}`);
 
-                // 4. Namaz vakitlerini al
+                // Mevcut GPS ve Manuel konum cache'leri ile karşılaştır
+                setStatus('checking_cache');
+                const cachedGPSCityInfo = await loadGPSCityInfo();
+                const cachedManualLocationId = await loadLastLocationId();
+                
+                // GPS cache ile karşılaştır
+                if (cachedGPSCityInfo && cachedGPSCityInfo.id === cityDetail.id) {
+                    console.log('📍 Aynı GPS konumu tespit edildi, cache kullanılıyor:', cityDetail.name);
+                    
+                    // Cache'deki namaz vakitlerini al
+                    const cachedPrayerTimes = await loadGPSPrayerTimes();
+                    
+                    if (cachedPrayerTimes && cachedPrayerTimes.length > 0) {
+                        setStatus('same_location');
+                        
+                        // Kısa bir süre bekle, sonra mevcut verilerle tamamla
+                        setTimeout(() => {
+                            onComplete({
+                                success: true,
+                                cityDetail,
+                                prayerTimes: cachedPrayerTimes,
+                            });
+                        }, 1500);
+                        return;
+                    }
+                    // Cache boşsa devam et ve API'den çek
+                }
+                
+                // Manuel cache ile karşılaştır (GPS -> Manuel geçişi)
+                if (cachedManualLocationId && cachedManualLocationId === Number(cityDetail.id)) {
+                    console.log('📍 Manuel konum ile aynı GPS konumu tespit edildi, cache kullanılıyor:', cityDetail.name);
+                    
+                    // Manuel cache'deki namaz vakitlerini al
+                    const cachedManualPrayerTimes = await loadPrayerTimes();
+                    
+                    if (cachedManualPrayerTimes && cachedManualPrayerTimes.length > 0) {
+                        setStatus('same_location');
+                        
+                        // Kısa bir süre bekle, sonra mevcut verilerle tamamla
+                        setTimeout(() => {
+                            onComplete({
+                                success: true,
+                                cityDetail,
+                                prayerTimes: cachedManualPrayerTimes,
+                            });
+                        }, 1500);
+                        return;
+                    }
+                    // Cache boşsa devam et ve API'den çek
+                }
+
+                // 4. Namaz vakitlerini al (farklı konum veya cache boş)
+                console.log('🔄 Yeni GPS konumu için namaz vakitleri çekiliyor:', cityDetail.name);
                 const prayerTimesData = await DiyanetService.getPrayerTimes(cityDetail.id, 'Monthly');
 
                 // Veriyi dönüştür
@@ -353,8 +406,10 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
             case 'loading_location':
                 return <MaterialIcons name="my-location" size={60} color="#FFFFFF" />;
             case 'loading_data':
+            case 'checking_cache':
                 return <MaterialIcons name="cloud-download" size={60} color="#FFFFFF" />;
             case 'success':
+            case 'same_location':
                 return <MaterialIcons name="check-circle" size={60} color="#4ADE80" />;
             case 'denied':
             case 'blocked':
@@ -376,6 +431,10 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                 return 'Konumunuz Alınıyor';
             case 'loading_data':
                 return 'Namaz Vakitleri Yükleniyor';
+            case 'checking_cache':
+                return 'Konum Kontrol Ediliyor';
+            case 'same_location':
+                return 'Aynı Konumdasınız!';
             case 'success':
                 return 'Konum Belirlendi!';
             case 'denied':
@@ -400,6 +459,10 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                 return 'GPS sinyali aranıyor, lütfen bekleyin...';
             case 'loading_data':
                 return 'Konumunuza göre namaz vakitleri getiriliyor...';
+            case 'checking_cache':
+                return 'Mevcut konum kontrol ediliyor...';
+            case 'same_location':
+                return locationName ? `📍 ${locationName}\n\nZaten bu konumdasınız, mevcut veriler kullanılıyor.` : 'Zaten bu konumdasınız!';
             case 'success':
                 return locationName ? `📍 ${locationName}` : 'Konum başarıyla belirlendi!';
             case 'denied':
@@ -414,7 +477,7 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
     };
 
     // Yükleniyor durumu
-    const isLoading = ['checking', 'requesting', 'loading_location', 'loading_data'].includes(status);
+    const isLoading = ['checking', 'requesting', 'loading_location', 'loading_data', 'checking_cache'].includes(status);
 
     // Animasyonlu kapanış
     const animateOut = (callback: () => void) => {

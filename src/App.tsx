@@ -15,7 +15,9 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, StatusBar, Animated } from 'react-native';
 import LocationModal from './components/LocationModal';
+import LocationChangeModal from './components/LocationChangeModal';
 import LocationMethodModal from './components/LocationMethodModal';
+import WidgetPermissionsModal from './components/WidgetPermissionsModal';
 import PrayerTimesDisplay from './components/PrayerTimesDisplay';
 import WeeklyPrayerTimes from './screens/WeeklyPrayerTimes';
 import MonthlyPrayerTimes from './screens/MonthlyPrayerTimes';
@@ -26,7 +28,10 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { useLocationData } from './hooks/useLocationData';
 import { usePrayerTimes } from './hooks/usePrayerTimes';
 import { useGPSPrayerTimes } from './hooks/useGPSPrayerTimes';
+import { useLocationChangeCheck } from './hooks/useLocationChangeCheck';
+import { DiyanetService } from './api/apiDiyanet';
 import * as storageService from './services/storageService';
+import { updateWidget } from './services/WidgetService';
 import GradientBackground from './components/ui/GradientBackground';
 import GlassView from './components/ui/GlassView';
 import OnboardingOverlay from './components/OnboardingOverlay';
@@ -62,6 +67,7 @@ const AppContent: React.FC = () => {
     const { currentDayPrayerTime, allPrayerTimes, setAllPrayerTimes } = usePrayerTimes();
     const { gpsPrayerTimes, currentDayPrayerTime: gpsCurrentDayPrayerTime, isGPSMode, refreshGPSPrayerTimes, setGpsPrayerTimes: setGPSPrayerTimesHook, setIsGPSMode } = useGPSPrayerTimes();
     useLocationData();
+    const { showChangeModal, newLocation, setShowChangeModal } = useLocationChangeCheck();
 
     const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
     const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
@@ -84,6 +90,8 @@ const AppContent: React.FC = () => {
 
     // Qibla Compass Modal state
     const [showQiblaCompass, setShowQiblaCompass] = useState(false);
+    const [isChangingLocation, setIsChangingLocation] = useState(false);
+    const [showWidgetPermissions, setShowWidgetPermissions] = useState(false);
 
 
 
@@ -393,6 +401,82 @@ const AppContent: React.FC = () => {
         return currentDayPrayerTime;
     }, [isGPSMode, locationMode, gpsCurrentDayPrayerTime, currentDayPrayerTime]);
 
+    // Widget güncelleme
+    useEffect(() => {
+        if (activePrayerTime) {
+            const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
+            const hasGPSLocation = gpsLocationInfo !== null && locationMode === 'gps';
+
+            let locationName = 'Konum Seçilmedi';
+            let locationDetail = { country: '', city: '', district: '' };
+
+            if (hasGPSLocation && gpsLocationInfo) {
+                locationName = gpsLocationInfo.name;
+                locationDetail = {
+                    country: gpsLocationInfo.country,
+                    city: gpsLocationInfo.city,
+                    district: gpsLocationInfo.name,
+                };
+            } else if (hasFullLocation && selectedLocation.district) {
+                locationName = selectedLocation.district.name;
+                locationDetail = {
+                    country: selectedLocation.country!.name,
+                    city: selectedLocation.city!.name,
+                    district: selectedLocation.district.name,
+                };
+            }
+
+            updateWidget(locationName, activePrayerTime, locationDetail);
+        }
+    }, [activePrayerTime, selectedLocation, gpsLocationInfo, locationMode]);
+
+    const handleConfirmLocationChange = async () => {
+        if (!newLocation) {
+            return;
+        }
+
+        setIsChangingLocation(true);
+        try {
+            // Namaz vakitlerini çek
+            const prayerTimesData = await DiyanetService.getPrayerTimes(newLocation.id, 'Monthly');
+
+            // Veriyi dönüştür
+            const convertToPrayerTime = (data: any) => ({
+                date: data.gregorianDateShort.split('.').reverse().join('-'),
+                fajr: data.fajr,
+                sun: data.sunrise,
+                dhuhr: data.dhuhr,
+                asr: data.asr,
+                maghrib: data.maghrib,
+                isha: data.isha,
+                hijriDate: data.hijriDateShort.split('.')[0],
+                hijriMonth: data.hijriDateLong.split(' ')[1],
+                hijriYear: data.hijriDateShort.split('.')[2],
+                gregorianDateLong: data.gregorianDateLong,
+                hijriDateLong: data.hijriDateLong,
+            });
+
+            const convertedPrayerTimes = prayerTimesData.map(convertToPrayerTime);
+
+            const result: GPSLocationResult = {
+                success: true,
+                cityDetail: newLocation,
+                prayerTimes: convertedPrayerTimes,
+            };
+
+            await handleGPSComplete(result);
+            setShowChangeModal(false);
+        } catch (error) {
+            console.error('Error changing location:', error);
+        } finally {
+            setIsChangingLocation(false);
+        }
+    };
+
+    const handleCancelLocationChange = () => {
+        setShowChangeModal(false);
+    };
+
     const styles = createStyles(theme, isSmallScreen, screenWidth);
 
     // Ekran geçişleri - memoized veriler ile
@@ -431,6 +515,14 @@ const AppContent: React.FC = () => {
                 <View style={styles.header}>
                     <Text style={styles.headerTitle}>Namaz Vakti</Text>
                     <View style={styles.headerButtons}>
+                        <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={() => setShowWidgetPermissions(true)}
+                        >
+                            <View style={styles.iconButtonInner}>
+                                <MaterialIcons name="widgets" size={24} color={theme.colors.accent} />
+                            </View>
+                        </TouchableOpacity>
                         <TouchableOpacity
                             style={styles.iconButton}
                             onPress={() => setShowQiblaCompass(true)}
@@ -636,6 +728,21 @@ const AppContent: React.FC = () => {
                 <QiblaCompass
                     visible={showQiblaCompass}
                     onClose={() => setShowQiblaCompass(false)}
+                />
+
+                {/* Location Change Modal */}
+                <LocationChangeModal
+                    visible={showChangeModal}
+                    newLocationName={newLocation ? `${newLocation.name}, ${newLocation.city}` : ''}
+                    onConfirm={handleConfirmLocationChange}
+                    onCancel={handleCancelLocationChange}
+                    isLoading={isChangingLocation}
+                />
+
+                {/* Widget Permissions Modal */}
+                <WidgetPermissionsModal
+                    visible={showWidgetPermissions}
+                    onClose={() => setShowWidgetPermissions(false)}
                 />
 
 
