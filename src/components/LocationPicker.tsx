@@ -27,7 +27,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
     const [error, setError] = useState('');
     const [showSameLocationModal, setShowSameLocationModal] = useState(false);
     const [sameLocationName, setSameLocationName] = useState('');
-    
+
     // Modal açıldığında mevcut cache'deki ID'leri sakla (bir kez)
     const [initialCachedIds, setInitialCachedIds] = useState<{
         manualId: number | null;
@@ -40,18 +40,18 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
             const cachedManualLocationId = await loadLastLocationId();
             const cachedGPSCityInfo = await loadGPSCityInfo();
             const cachedGPSLocationId = cachedGPSCityInfo ? parseInt(cachedGPSCityInfo.id, 10) : null;
-            
+
             setInitialCachedIds({
                 manualId: cachedManualLocationId,
                 gpsId: cachedGPSLocationId,
             });
-            
+
             console.log('🔒 Başlangıç cache ID\'leri kaydedildi:', {
                 manualId: cachedManualLocationId,
                 gpsId: cachedGPSLocationId,
             });
         };
-        
+
         loadInitialCachedIds();
     }, []);
 
@@ -111,7 +111,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
     const handleConfirmLocation = async () => {
         if (selectedLocation.country && selectedLocation.city && selectedLocation.district) {
             const selectedDistrictId = selectedLocation.district.id;
-            
+
             // Başlangıçta kaydedilen cache ID'lerini kullan (güncellenmiş değil!)
             if (!initialCachedIds) {
                 // Henüz yüklenmemişse, yeni konum olarak kabul et
@@ -119,12 +119,12 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                 onClose();
                 return;
             }
-            
+
             // Seçilen ID, BAŞLANGIÇTA kaydedilen herhangi bir cache ID ile aynı mı?
             const isSameAsManual = initialCachedIds.manualId !== null && initialCachedIds.manualId === selectedDistrictId;
             const isSameAsGPS = initialCachedIds.gpsId !== null && initialCachedIds.gpsId === selectedDistrictId;
             const isSameLocation = isSameAsManual || isSameAsGPS;
-            
+
             console.log('🔍 Konum karşılaştırması (başlangıç değerleri ile):', {
                 selectedDistrictId,
                 initialManualId: initialCachedIds.manualId,
@@ -133,7 +133,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                 isSameAsGPS,
                 isSameLocation,
             });
-            
+
             // Herhangi bir cache'de aynı ID varsa modal göster
             if (isSameLocation) {
                 console.log('📍 Aynı konum seçildi, API isteği yapılmıyor:', selectedLocation.district.name);
@@ -141,7 +141,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                 setShowSameLocationModal(true);
                 return;
             }
-            
+
             // Farklı konum seçildi, modal kapat ve usePrayerTimes hook'u API'yi çağıracak
             console.log('🔄 Yeni manuel konum seçildi:', selectedLocation.district.name);
             onClose();

@@ -265,17 +265,17 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                 setStatus('checking_cache');
                 const cachedGPSCityInfo = await loadGPSCityInfo();
                 const cachedManualLocationId = await loadLastLocationId();
-                
+
                 // GPS cache ile karşılaştır
                 if (cachedGPSCityInfo && cachedGPSCityInfo.id === cityDetail.id) {
                     console.log('📍 Aynı GPS konumu tespit edildi, cache kullanılıyor:', cityDetail.name);
-                    
+
                     // Cache'deki namaz vakitlerini al
                     const cachedPrayerTimes = await loadGPSPrayerTimes();
-                    
+
                     if (cachedPrayerTimes && cachedPrayerTimes.length > 0) {
                         setStatus('same_location');
-                        
+
                         // Kısa bir süre bekle, sonra mevcut verilerle tamamla
                         setTimeout(() => {
                             onComplete({
@@ -288,17 +288,17 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                     }
                     // Cache boşsa devam et ve API'den çek
                 }
-                
+
                 // Manuel cache ile karşılaştır (GPS -> Manuel geçişi)
                 if (cachedManualLocationId && cachedManualLocationId === Number(cityDetail.id)) {
                     console.log('📍 Manuel konum ile aynı GPS konumu tespit edildi, cache kullanılıyor:', cityDetail.name);
-                    
+
                     // Manuel cache'deki namaz vakitlerini al
                     const cachedManualPrayerTimes = await loadPrayerTimes();
-                    
+
                     if (cachedManualPrayerTimes && cachedManualPrayerTimes.length > 0) {
                         setStatus('same_location');
-                        
+
                         // Kısa bir süre bekle, sonra mevcut verilerle tamamla
                         setTimeout(() => {
                             onComplete({
