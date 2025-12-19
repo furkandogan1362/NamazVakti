@@ -198,16 +198,25 @@ export const usePrayerTimes = () => {
         fetchPrayerTimes();
     }, [fetchPrayerTimes]);
 
-    // Günün namaz vaktini güncelle
+    // Günün namaz vaktini güncelle ve periyodik kontrol
     useEffect(() => {
         updateCurrentDayPrayerTime();
 
+        // Her dakika günü kontrol et
         const interval = setInterval(() => {
             updateCurrentDayPrayerTime();
         }, 60000);
 
-        return () => clearInterval(interval);
-    }, [allPrayerTimes, updateCurrentDayPrayerTime, lastFetchDate]);
+        // Her saat cache durumunu kontrol et (30 günlük veri kontrolü)
+        const hourlyCheck = setInterval(() => {
+            fetchPrayerTimes();
+        }, 60 * 60 * 1000); // Her saat
+
+        return () => {
+            clearInterval(interval);
+            clearInterval(hourlyCheck);
+        };
+    }, [allPrayerTimes, updateCurrentDayPrayerTime, lastFetchDate, fetchPrayerTimes]);
 
     return { currentDayPrayerTime, allPrayerTimes, setAllPrayerTimes };
 };

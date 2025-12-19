@@ -96,7 +96,8 @@ class PrayerTimesWidget : AppWidgetProvider() {
 
         fun updateAppWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
             val prefs: SharedPreferences = context.getSharedPreferences("WidgetData", Context.MODE_PRIVATE)
-            val prayerTimesJson = prefs.getString("prayerTimes", null)
+            val prayerTimesJsonSingle = prefs.getString("prayerTimes", null)
+            val monthlyJsonRaw = prefs.getString("monthlyPrayerTimes", null)
             val locationName = prefs.getString("locationName", "Konum Seçilmedi") ?: "Konum Seçilmedi"
 
             val views = RemoteViews(context.packageName, R.layout.widget_prayer_times)
@@ -106,22 +107,19 @@ class PrayerTimesWidget : AppWidgetProvider() {
             val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
             views.setOnClickPendingIntent(R.id.header_container, pendingIntent)
 
-            if (prayerTimesJson != null) {
+            // Determine which data to use: prefer monthly cache for correct day rollover
+            var effectiveTimes: JSONObject? = null
+            var timezoneIdFromMonthly: String? = null
+
+            if (monthlyJsonRaw != null) {
                 try {
-                    val times = JSONObject(prayerTimesJson)
-                    val fajr = times.getString("fajr")
-                    val sun = times.getString("sun")
-                    val dhuhr = times.getString("dhuhr")
-                    val asr = times.getString("asr")
-                    val maghrib = times.getString("maghrib")
-                    val isha = times.getString("isha")
-                    
-                    // Location details
-                    val country = times.optString("country", "")
-                    val city = times.optString("city", "")
-                    val district = times.optString("district", "")
-                    
-                    // Format location text: "Country, City, District" or fallback to locationName
+                    val monthlyObj = JSONObject(monthlyJsonRaw)
+                    timezoneIdFromMonthly = monthlyObj.optString("timezoneId", null)
+
+                    // Location override from monthly meta if present
+                    val country = monthlyObj.optString("country", "")
+                    val city = monthlyObj.optString("city", "")
+                    val district = monthlyObj.optString("district", "")
                     val fullLocation = if (country.isNotEmpty() && city.isNotEmpty()) {
                         if (district.isNotEmpty() && district != city) {
                             "$country, $city, $district"
@@ -131,8 +129,77 @@ class PrayerTimesWidget : AppWidgetProvider() {
                     } else {
                         locationName
                     }
-                    
                     views.setTextViewText(R.id.location_text, fullLocation)
+
+                    // Pick today's item by date in that timezone
+                    val tzId = timezoneIdFromMonthly ?: TimeZone.getDefault().id
+                    val tz = TimeZone.getTimeZone(tzId)
+                    val cal = Calendar.getInstance(tz)
+                    val y = cal.get(Calendar.YEAR)
+                    val m = cal.get(Calendar.MONTH) + 1
+                    val d = cal.get(Calendar.DAY_OF_MONTH)
+                    val todayStr = String.format(Locale.US, "%04d-%02d-%02d", y, m, d)
+
+                    val days = monthlyObj.optJSONArray("days")
+                    if (days != null) {
+                        for (i in 0 until days.length()) {
+                            val dayObj = days.optJSONObject(i)
+                            if (dayObj != null && todayStr == dayObj.optString("date")) {
+                                // Normalize to expected widget schema
+                                effectiveTimes = JSONObject().apply {
+                                    put("fajr", dayObj.optString("fajr"))
+                                    put("sun", dayObj.optString("sun"))
+                                    put("dhuhr", dayObj.optString("dhuhr"))
+                                    put("asr", dayObj.optString("asr"))
+                                    put("maghrib", dayObj.optString("maghrib"))
+                                    put("isha", dayObj.optString("isha"))
+                                    put("timezoneId", tzId)
+                                    put("country", country)
+                                    put("city", city)
+                                    put("district", district)
+                                }
+                                break
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e(TAG, "Failed to parse monthly widget cache", e)
+                }
+            }
+
+            // Fallback to single-day payload if monthly not available or today's not found
+            if (effectiveTimes == null && prayerTimesJsonSingle != null) {
+                try {
+                    effectiveTimes = JSONObject(prayerTimesJsonSingle)
+                } catch (_: Exception) {}
+            }
+
+            if (effectiveTimes != null) {
+                try {
+                    val times = effectiveTimes
+                    val fajr = times.getString("fajr")
+                    val sun = times.getString("sun")
+                    val dhuhr = times.getString("dhuhr")
+                    val asr = times.getString("asr")
+                    val maghrib = times.getString("maghrib")
+                    val isha = times.getString("isha")
+
+                    // Location was already set above for monthly; for single-day ensure it's set
+                    if (monthlyJsonRaw == null) {
+                        val country = times.optString("country", "")
+                        val city = times.optString("city", "")
+                        val district = times.optString("district", "")
+                        val fullLocation = if (country.isNotEmpty() && city.isNotEmpty()) {
+                            if (district.isNotEmpty() && district != city) {
+                                "$country, $city, $district"
+                            } else {
+                                "$country, $city"
+                            }
+                        } else {
+                            locationName
+                        }
+                        views.setTextViewText(R.id.location_text, fullLocation)
+                    }
 
                     views.setTextViewText(R.id.fajr_time, fajr)
                     views.setTextViewText(R.id.sun_time, sun)
@@ -143,7 +210,7 @@ class PrayerTimesWidget : AppWidgetProvider() {
 
                     // Get Timezone ID from JSON (e.g. "Europe/Istanbul")
                     // Default to device timezone if not provided
-                    val timezoneId = times.optString("timezoneId", TimeZone.getDefault().id)
+                    val timezoneId = times.optString("timezoneId", timezoneIdFromMonthly ?: TimeZone.getDefault().id)
                     val timeZone = TimeZone.getTimeZone(timezoneId)
                     
                     // Get Current Time in that Timezone

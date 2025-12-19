@@ -68,7 +68,8 @@ class PrayerTimesService : Service() {
         try {
             NotificationHelper.createNotificationChannel(this)
             val notification = androidx.core.app.NotificationCompat.Builder(this, "prayer_times_channel")
-                .setSmallIcon(R.mipmap.ic_launcher)
+                .setSmallIcon(R.mipmap.namazvakti_logo5)
+                .setColor(android.graphics.Color.WHITE)
                 .setContentTitle("Namaz Vakitleri")
                 .setContentText("Yükleniyor...")
                 .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)  // LOW priority
@@ -97,12 +98,65 @@ class PrayerTimesService : Service() {
 
     private fun updateNotification() {
         val prefs: SharedPreferences = getSharedPreferences("WidgetData", Context.MODE_PRIVATE)
-        val prayerTimesJson = prefs.getString("prayerTimes", null)
+        val prayerTimesJsonSingle = prefs.getString("prayerTimes", null)
+        val monthlyJsonRaw = prefs.getString("monthlyPrayerTimes", null)
         val locationName = prefs.getString("locationName", "Konum Seçilmedi") ?: "Konum Seçilmedi"
 
-        if (prayerTimesJson != null) {
+        // Determine which data to use: prefer monthly cache for correct day rollover
+        var effectiveTimes: JSONObject? = null
+        var timezoneIdFromMonthly: String? = null
+
+        if (monthlyJsonRaw != null) {
             try {
-                val times = JSONObject(prayerTimesJson)
+                val monthlyObj = JSONObject(monthlyJsonRaw)
+                timezoneIdFromMonthly = monthlyObj.optString("timezoneId", null)
+
+                // Pick today's item by date in that timezone
+                val tzId = timezoneIdFromMonthly ?: TimeZone.getDefault().id
+                val tz = TimeZone.getTimeZone(tzId)
+                val cal = Calendar.getInstance(tz)
+                val y = cal.get(Calendar.YEAR)
+                val m = cal.get(Calendar.MONTH) + 1
+                val d = cal.get(Calendar.DAY_OF_MONTH)
+                val todayStr = String.format(Locale.US, "%04d-%02d-%02d", y, m, d)
+
+                val days = monthlyObj.optJSONArray("days")
+                if (days != null) {
+                    for (i in 0 until days.length()) {
+                        val dayObj = days.optJSONObject(i)
+                        if (dayObj != null && todayStr == dayObj.optString("date")) {
+                            // Normalize to expected notification schema
+                            effectiveTimes = JSONObject().apply {
+                                put("fajr", dayObj.optString("fajr"))
+                                put("sun", dayObj.optString("sun"))
+                                put("dhuhr", dayObj.optString("dhuhr"))
+                                put("asr", dayObj.optString("asr"))
+                                put("maghrib", dayObj.optString("maghrib"))
+                                put("isha", dayObj.optString("isha"))
+                                put("timezoneId", tzId)
+                                put("country", monthlyObj.optString("country", ""))
+                                put("city", monthlyObj.optString("city", ""))
+                                put("district", monthlyObj.optString("district", ""))
+                            }
+                            break
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e(TAG, "Failed to parse monthly notification cache", e)
+            }
+        }
+
+        // Fallback to single-day payload if monthly not available or today's not found
+        if (effectiveTimes == null && prayerTimesJsonSingle != null) {
+            try {
+                effectiveTimes = JSONObject(prayerTimesJsonSingle)
+            } catch (_: Exception) {}
+        }
+
+        if (effectiveTimes != null) {
+            try {
+                val times = effectiveTimes
                 val fajr = times.getString("fajr")
                 val sun = times.getString("sun")
                 val dhuhr = times.getString("dhuhr")
@@ -124,7 +178,7 @@ class PrayerTimesService : Service() {
                     locationName
                 }
 
-                val timezoneId = times.optString("timezoneId", TimeZone.getDefault().id)
+                val timezoneId = times.optString("timezoneId", timezoneIdFromMonthly ?: TimeZone.getDefault().id)
                 val timeZone = TimeZone.getTimeZone(timezoneId)
 
                 val now = Calendar.getInstance(timeZone)

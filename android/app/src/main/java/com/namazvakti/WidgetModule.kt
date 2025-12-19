@@ -37,6 +37,28 @@ class WidgetModule(reactContext: ReactApplicationContext) : ReactContextBaseJava
         PrayerTimesService.startService(context)
     }
 
+    // Aylık (veya 30 günlük) vakitleri widget için cache'le
+    // monthlyJson formatı:
+    // {
+    //   "timezoneId": "Europe/Istanbul",
+    //   "country": "Türkiye",
+    //   "city": "İstanbul",
+    //   "district": "Kadıköy",
+    //   "days": [ { "date": "2025-12-19", "fajr": "..", ... }, ... ]
+    // }
+    @ReactMethod
+    fun updateWidgetMonthlyCache(monthlyJson: String) {
+        val prefs: SharedPreferences = context.getSharedPreferences("WidgetData", Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        editor.putString("monthlyPrayerTimes", monthlyJson)
+        editor.apply()
+
+        // Widget'ı güncelle (mevcut gün verisini monthly cache'ten seçer)
+        val intent = Intent(context, PrayerTimesWidget::class.java)
+        intent.action = "com.namazvakti.UPDATE_WIDGET"
+        context.sendBroadcast(intent)
+    }
+
     @ReactMethod
     fun requestBatteryOptimizationPermission() {
         android.util.Log.d("WidgetModule", "Requesting Battery Optimization Permission")

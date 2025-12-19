@@ -256,16 +256,27 @@ export const useGPSPrayerTimes = () => {
         }
     }, [fetchGPSPrayerTimes, isGPSMode]);
 
-    // Her dakika günü kontrol et ve güncelle
+    // Her dakika günü kontrol et ve güncelle, periyodik cache kontrolü
     useEffect(() => {
         updateCurrentDayPrayerTime();
 
+        // Her dakika günü kontrol et
         const interval = setInterval(() => {
             updateCurrentDayPrayerTime();
         }, 60000); // Her dakika kontrol et
 
-        return () => clearInterval(interval);
-    }, [gpsPrayerTimes, updateCurrentDayPrayerTime]);
+        // Her saat cache durumunu kontrol et (30 günlük veri kontrolü)
+        const hourlyCheck = setInterval(() => {
+            if (isGPSMode) {
+                fetchGPSPrayerTimes();
+            }
+        }, 60 * 60 * 1000); // Her saat
+
+        return () => {
+            clearInterval(interval);
+            clearInterval(hourlyCheck);
+        };
+    }, [gpsPrayerTimes, updateCurrentDayPrayerTime, fetchGPSPrayerTimes, isGPSMode]);
 
     return {
         gpsPrayerTimes,

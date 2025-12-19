@@ -63,6 +63,81 @@ export const updateWidget = async (
     }
 };
 
+// Aylık/30 günlük vakit listesini widget'a cache olarak gönder
+export const syncWidgetMonthlyCache = async (
+    locationName: string,
+    monthlyPrayerTimes: PrayerTime[],
+    locationDetail?: { country: string; city: string; district: string }
+) => {
+    if (Platform.OS !== 'android') {return;}
+    try {
+        // Determine timezone same way we do for single update
+        let timezoneId = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+        if (locationDetail?.city) {
+            const cacheKey = `${locationDetail.city}-${locationDetail.country}`;
+            if (timezoneCache[cacheKey] !== undefined) {
+                timezoneId = timezoneCache[cacheKey];
+            } else {
+                try {
+                    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationDetail.city)}&count=1&language=tr&format=json`;
+                    const geoRes = await fetch(geoUrl);
+                    const geoData = await geoRes.json();
+                    if (geoData.results && geoData.results.length > 0) {
+                        const result = geoData.results[0];
+                        if (result.timezone) {
+                            timezoneId = result.timezone;
+                            timezoneCache[cacheKey] = timezoneId;
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to fetch timezone for monthly cache:', e);
+                }
+            }
+        }
+
+        // Prepare compact monthly payload for native widget
+        const days = monthlyPrayerTimes.map(pt => ({
+            date: pt.date.split('T')[0],
+            fajr: pt.fajr,
+            sun: pt.sun,
+            dhuhr: pt.dhuhr,
+            asr: pt.asr,
+            maghrib: pt.maghrib,
+            isha: pt.isha,
+        }));
+
+        const monthlyPayload = {
+            timezoneId,
+            country: locationDetail?.country || '',
+            city: locationDetail?.city || '',
+            district: locationDetail?.district || '',
+            days,
+        };
+
+        // Keep last known location name for widget header fallback
+        WidgetModule.updateWidgetData(locationName, JSON.stringify({
+            fajr: days[0]?.fajr || '',
+            sun: days[0]?.sun || '',
+            dhuhr: days[0]?.dhuhr || '',
+            asr: days[0]?.asr || '',
+            maghrib: days[0]?.maghrib || '',
+            isha: days[0]?.isha || '',
+            country: monthlyPayload.country,
+            city: monthlyPayload.city,
+            district: monthlyPayload.district,
+            timezoneId: monthlyPayload.timezoneId,
+        }));
+
+        // Push monthly cache to native side (used for day rollover without app open)
+        if (WidgetModule.updateWidgetMonthlyCache) {
+            WidgetModule.updateWidgetMonthlyCache(JSON.stringify(monthlyPayload));
+        }
+    } catch (error) {
+        console.error('Error syncing widget monthly cache:', error);
+    }
+};
+
 export const requestBatteryOptimization = () => {
     if (Platform.OS !== 'android') {return;}
     WidgetModule.requestBatteryOptimizationPermission();

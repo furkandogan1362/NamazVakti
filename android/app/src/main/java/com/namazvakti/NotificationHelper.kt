@@ -78,27 +78,39 @@ object NotificationHelper {
             else -> ""
         }
 
-        // Kalan süreyi HH:MM:SS formatında hesapla
+        // Kalan süreyi hesapla
         val hours = remainingSeconds / 3600
         val minutes = (remainingSeconds % 3600) / 60
         val seconds = remainingSeconds % 60
-        val remainingText = String.format("%02d:%02d:%02d", hours, minutes, seconds)
+        
+        // Sayaç formatı (HH:MM:SS) - üst satır için
+        val remainingCounter = String.format("%02d:%02d:%02d", hours, minutes, seconds)
+        
+        // Açık metin formatı - alt satır için
+        val remainingTextLong = when {
+            hours > 0 && minutes > 0 -> "$hours saat $minutes dakika kaldı."
+            hours > 0 && minutes == 0 -> "$hours saat kaldı."
+            hours == 0 && minutes > 0 -> "$minutes dakika kaldı."
+            else -> "1 dakikadan az kaldı."
+        }
 
-        // Format: Bölge • Vakit: Saat (üst satır), Kalan: HH:MM:SS (alt satır)
-        val titleText = "$locationName • $nextPrayerName: $nextPrayerTime"
-        val contentText = "Kalan: $remainingText"
+        // Başlık: Sadece bölge adı (büyük ve kalın)
+        // İçerik: Vakit bilgisi ve sayaç (küçük font)
+        val titleText = locationName
+        val contentText = "$nextPrayerName: $nextPrayerTime • $remainingCounter"
         
         // Genişletilmiş görünüm için tüm vakitler
         val bigText = "İmsak: $fajr  •  Güneş: $sun  •  Öğle: $dhuhr\nİkindi: $asr  •  Akşam: $maghrib  •  Yatsı: $isha"
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.ic_launcher)
+            .setSmallIcon(R.mipmap.namazvakti_logo5)
+            .setColor(android.graphics.Color.WHITE)
             .setContentTitle(titleText)
             .setContentText(contentText)
             .setStyle(NotificationCompat.BigTextStyle()
                 .bigText(bigText)
                 .setBigContentTitle(titleText)
-                .setSummaryText(contentText))
+                .setSummaryText(remainingTextLong))  // Alt satırda açık metin
             .setOngoing(true)
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_LOW)  // LOW priority - sessiz bildirim

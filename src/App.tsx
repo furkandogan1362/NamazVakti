@@ -31,7 +31,7 @@ import { useGPSPrayerTimes } from './hooks/useGPSPrayerTimes';
 import { useLocationChangeCheck } from './hooks/useLocationChangeCheck';
 import { DiyanetService } from './api/apiDiyanet';
 import * as storageService from './services/storageService';
-import { updateWidget } from './services/WidgetService';
+import { updateWidget, syncWidgetMonthlyCache } from './services/WidgetService';
 import GradientBackground from './components/ui/GradientBackground';
 import GlassView from './components/ui/GlassView';
 import OnboardingOverlay from './components/OnboardingOverlay';
@@ -401,7 +401,7 @@ const AppContent: React.FC = () => {
         return currentDayPrayerTime;
     }, [isGPSMode, locationMode, gpsCurrentDayPrayerTime, currentDayPrayerTime]);
 
-    // Widget güncelleme
+    // Widget güncelleme (günlük)
     useEffect(() => {
         if (activePrayerTime) {
             const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
@@ -429,6 +429,36 @@ const AppContent: React.FC = () => {
             updateWidget(locationName, activePrayerTime, locationDetail);
         }
     }, [activePrayerTime, selectedLocation, gpsLocationInfo, locationMode]);
+
+    // Widget aylık cache senkronizasyonu (gün geçişlerinde otomatik güncelleme için)
+    useEffect(() => {
+        if (memoizedPrayerTimes.length > 0) {
+            const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
+            const hasGPSLocation = gpsLocationInfo !== null && locationMode === 'gps';
+
+            let locationName = 'Konum Seçilmedi';
+            let locationDetail = { country: '', city: '', district: '' };
+
+            if (hasGPSLocation && gpsLocationInfo) {
+                locationName = gpsLocationInfo.name;
+                locationDetail = {
+                    country: gpsLocationInfo.country,
+                    city: gpsLocationInfo.city,
+                    district: gpsLocationInfo.name,
+                };
+            } else if (hasFullLocation && selectedLocation.district) {
+                locationName = selectedLocation.district.name;
+                locationDetail = {
+                    country: selectedLocation.country!.name,
+                    city: selectedLocation.city!.name,
+                    district: selectedLocation.district.name,
+                };
+            }
+
+            // Aylık cache'i native tarafına gönder (API çağrısı yapılmaz, mevcut veriler kullanılır)
+            syncWidgetMonthlyCache(locationName, memoizedPrayerTimes, locationDetail);
+        }
+    }, [memoizedPrayerTimes, selectedLocation, gpsLocationInfo, locationMode]);
 
     const handleConfirmLocationChange = async () => {
         if (!newLocation) {
