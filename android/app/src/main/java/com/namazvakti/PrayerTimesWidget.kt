@@ -26,7 +26,11 @@ class PrayerTimesWidget : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        if (intent.action == "com.namazvakti.UPDATE_WIDGET" || intent.action == "com.namazvakti.WIDGET_UPDATE_ALARM") {
+        if (intent.action == "com.namazvakti.UPDATE_WIDGET" || 
+            intent.action == "com.namazvakti.WIDGET_UPDATE_ALARM" ||
+            intent.action == Intent.ACTION_TIME_CHANGED ||
+            intent.action == Intent.ACTION_TIMEZONE_CHANGED) {
+            
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val thisAppWidget = ComponentName(context.packageName, PrayerTimesWidget::class.java.name)
             val appWidgetIds = appWidgetManager.getAppWidgetIds(thisAppWidget)
@@ -323,6 +327,30 @@ class PrayerTimesWidget : AppWidgetProvider() {
                         // Widget zaten güncel verilerle çağrılmış olmalı
                         // Bir sonraki vakit hesabı yukarıda zaten yapılıyor
                     }
+                    
+                    // Use SystemClock.elapsedRealtime() for Chronometer base to be resilient to time changes
+                    // But Chronometer needs (elapsedRealtime + (targetTime - currentTime))
+                    // Wait, Chronometer counts relative to elapsedRealtime if setBase is used with elapsedRealtime.
+                    // If we want it to count down to a specific wall-clock time, we need to adjust.
+                    
+                    // The issue: When user changes system time, System.currentTimeMillis() changes, but SystemClock.elapsedRealtime() does not jump.
+                    // If we set base = SystemClock.elapsedRealtime() + remainingMillis
+                    // remainingMillis = targetTimeMillis (wall) - currentTimeMillis (wall)
+                    // If user moves clock forward: currentTimeMillis increases, remainingMillis decreases.
+                    // base decreases. Chronometer jumps forward. Correct.
+                    
+                    // If user moves clock backward: currentTimeMillis decreases, remainingMillis increases.
+                    // base increases. Chronometer jumps backward (shows more time). Correct.
+                    
+                    // So why does the user say it stays at 1 minute?
+                    // Maybe the widget update is NOT triggered when time changes back?
+                    // Widget updates are triggered by:
+                    // 1. AlarmManager (every minute)
+                    // 2. Broadcasts
+                    
+                    // If I move time back 5 hours, the AlarmManager trigger time (which was set to now + 1 min) is now 5 hours in the future!
+                    // So the widget will NOT update for 5 hours.
+                    // We need to listen to ACTION_TIME_CHANGED and update the widget immediately.
                     
                     val elapsedRealtimeOffset = SystemClock.elapsedRealtime() - currentTimeMillis
                     val chronometerBase = targetTimeMillis + elapsedRealtimeOffset

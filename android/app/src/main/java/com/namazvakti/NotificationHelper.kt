@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
+import android.text.Html
 import android.widget.RemoteViews
 import androidx.core.app.NotificationCompat
 import org.json.JSONObject
@@ -97,19 +98,63 @@ object NotificationHelper {
         // Başlık: Sadece bölge adı (büyük ve kalın)
         // İçerik: Vakit bilgisi ve sayaç (küçük font)
         val titleText = locationName
-        val contentText = "$nextPrayerName: $nextPrayerTime • $remainingCounter"
+        val contentText = "$nextPrayerName: $nextPrayerTime"
+        val expandedTitle = "$locationName  •  $remainingCounter"
         
         // Genişletilmiş görünüm için tüm vakitler
-        val bigText = "İmsak: $fajr  •  Güneş: $sun  •  Öğle: $dhuhr\nİkindi: $asr  •  Akşam: $maghrib  •  Yatsı: $isha"
+        // Mevcut vakti belirle (Bir sonraki vakte göre)
+        val currentPrayer = when(nextPrayerName) {
+            "Güneş" -> "İmsak"
+            "Öğle" -> "Güneş"
+            "İkindi" -> "Öğle"
+            "Akşam" -> "İkindi"
+            "Yatsı" -> "Akşam"
+            "İmsak" -> "Yatsı"
+            else -> ""
+        }
+
+        fun formatTime(name: String, time: String, isCurrent: Boolean): String {
+            // Vurgu rengi olarak yeşil (#4CAF50) kullanıyoruz
+            return if (isCurrent) "<font color='#4CAF50'><b>$name: $time</b></font>" else "$name: $time"
+        }
+
+        val p1 = formatTime("İmsak", fajr, currentPrayer == "İmsak")
+        val p2 = formatTime("Güneş", sun, currentPrayer == "Güneş")
+        val p3 = formatTime("Öğle", dhuhr, currentPrayer == "Öğle")
+        val p4 = formatTime("İkindi", asr, currentPrayer == "İkindi")
+        val p5 = formatTime("Akşam", maghrib, currentPrayer == "Akşam")
+        val p6 = formatTime("Yatsı", isha, currentPrayer == "Yatsı")
+
+        val bigTextHtml = "$p1  •  $p2  •  $p3<br/>$p4  •  $p5  •  $p6"
+
+        val bigTextSpanned = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            Html.fromHtml(bigTextHtml, Html.FROM_HTML_MODE_LEGACY)
+        } else {
+            @Suppress("DEPRECATION")
+            Html.fromHtml(bigTextHtml)
+        }
+
+        // Determine small icon based on remaining time
+        var smallIconResId = R.mipmap.namazvakti_logo5
+        // 61 dakika (3660 saniye) altındaysa geri sayım başlasın
+        // Böylece 60. dakikada (3600-3659 sn arası) "60" yazar.
+        if (remainingSeconds < 3660) {
+            val minutesLeft = remainingSeconds / 60
+            val iconName = "ic_stat_notify_$minutesLeft"
+            val resId = context.resources.getIdentifier(iconName, "drawable", context.packageName)
+            if (resId != 0) {
+                smallIconResId = resId
+            }
+        }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.mipmap.namazvakti_logo5)
+            .setSmallIcon(smallIconResId)
             .setColor(android.graphics.Color.WHITE)
             .setContentTitle(titleText)
             .setContentText(contentText)
             .setStyle(NotificationCompat.BigTextStyle()
-                .bigText(bigText)
-                .setBigContentTitle(titleText)
+                .bigText(bigTextSpanned)
+                .setBigContentTitle(expandedTitle)
                 .setSummaryText(remainingTextLong))  // Alt satırda açık metin
             .setOngoing(true)
             .setContentIntent(pendingIntent)
