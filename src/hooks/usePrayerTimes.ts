@@ -113,6 +113,11 @@ export const usePrayerTimes = (timezone?: string) => {
         const today = getLocalTodayDate(timezone);
 
         if (allPrayerTimes.length > 0) {
+            // Eğer zaten bugünün verisi gösteriliyorsa ve tarih değişmediyse işlem yapma
+            if (currentDayPrayerTime && currentDayPrayerTime.date.split('T')[0] === today) {
+                return;
+            }
+
             const currentDay = allPrayerTimes.find(pt => {
                 const ptDate = pt.date.split('T')[0];
                 return ptDate === today;
@@ -125,7 +130,7 @@ export const usePrayerTimes = (timezone?: string) => {
                 setCurrentDayPrayerTime(allPrayerTimes[0]);
             }
         }
-    }, [allPrayerTimes, timezone]);
+    }, [allPrayerTimes, timezone, currentDayPrayerTime]);
 
     const fetchPrayerTimes = useCallback(async () => {
         // İnternet yoksa direkt cache'den yükle
@@ -192,7 +197,7 @@ export const usePrayerTimes = (timezone?: string) => {
         } else {
             setLastLocationId(districtId);
         }
-    }, [selectedLocation.district, isOnline, lastLocationId]);
+    }, [isOnline, selectedLocation.district, lastLocationId, timezone]);
 
     // Başlangıçta cache'den yükle
     useEffect(() => {
@@ -216,10 +221,10 @@ export const usePrayerTimes = (timezone?: string) => {
     useEffect(() => {
         updateCurrentDayPrayerTime();
 
-        // Her dakika günü kontrol et
+        // Her saniye günü kontrol et (Gece yarısı geçişini anlık yakalamak için)
         const interval = setInterval(() => {
             updateCurrentDayPrayerTime();
-        }, 60000);
+        }, 1000);
 
         // Her saat cache durumunu kontrol et (30 günlük veri kontrolü)
         const hourlyCheck = setInterval(() => {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, FlatList, TextInput } from 'react-native';
 import { useLocation } from '../contexts/LocationContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { DiyanetManuelService } from '../api/apiDiyanetManuel';
@@ -12,6 +11,152 @@ import GlassView from './ui/GlassView';
 interface LocationPickerProps {
     onClose: () => void;
 }
+
+interface PickerItem {
+    label: string;
+    value: string;
+}
+
+interface CustomPickerProps {
+    label: string;
+    items: PickerItem[];
+    selectedValue: string;
+    onValueChange: (value: string) => void;
+    placeholder: string;
+    enabled?: boolean;
+    theme: any;
+    styles: any;
+}
+
+const CustomPicker: React.FC<CustomPickerProps> = ({
+    label,
+    items,
+    selectedValue,
+    onValueChange,
+    placeholder,
+    enabled = true,
+    theme,
+    styles,
+}) => {
+    const [modalVisible, setModalVisible] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+
+    const filteredItems = useMemo(() => {
+        if (!searchQuery) {return items;}
+
+        const normalize = (text: string) => {
+            let normalized = text.replace(/İ/g, 'i').replace(/I/g, 'i').replace(/ı/g, 'i');
+            return normalized
+                .toLowerCase()
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '');
+        };
+
+        const normalizedQuery = normalize(searchQuery);
+
+        return items.filter(item =>
+            normalize(item.label).includes(normalizedQuery)
+        );
+    }, [items, searchQuery]);
+
+    const selectedItem = items.find(i => i.value === selectedValue);
+
+    const handleSelect = (value: string) => {
+        onValueChange(value);
+        setModalVisible(false);
+        setSearchQuery('');
+    };
+
+    const handleOpen = () => {
+        if (enabled) {
+            setModalVisible(true);
+        }
+    };
+
+    return (
+        <View style={styles.pickerContainer}>
+            <Text style={styles.label}>{label}</Text>
+            <TouchableOpacity
+                style={[styles.pickerButton, !enabled && styles.disabledPicker]}
+                onPress={handleOpen}
+                activeOpacity={0.7}
+            >
+                <Text style={[styles.pickerButtonText, !selectedItem && styles.placeholderText]}>
+                    {selectedItem ? selectedItem.label : placeholder}
+                </Text>
+                <MaterialIcons name="arrow-drop-down" size={24} color={theme.colors.secondaryText} />
+            </TouchableOpacity>
+
+            <Modal
+                animationType="fade"
+                transparent={true}
+                visible={modalVisible}
+                onRequestClose={() => setModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <GlassView style={styles.pickerModalContent} autoHeight={false} overlayOpacity={0.98}>
+                        <View style={styles.pickerModalHeader}>
+                            <Text style={styles.pickerModalTitle}>{label} Seçiniz</Text>
+                            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.closeButton}>
+                                <MaterialIcons name="close" size={24} color={theme.colors.text} />
+                            </TouchableOpacity>
+                        </View>
+
+                        <View style={styles.searchContainer}>
+                            <View style={styles.searchWrapper}>
+                                <MaterialIcons name="search" size={20} color={theme.colors.secondaryText} style={styles.searchIcon} />
+                                <TextInput
+                                    style={styles.searchInput}
+                                    placeholder="Konumunuzu arayın..."
+                                    placeholderTextColor={theme.colors.secondaryText}
+                                    value={searchQuery}
+                                    onChangeText={setSearchQuery}
+                                    autoCorrect={false}
+                                />
+                                {searchQuery.length > 0 && (
+                                    <TouchableOpacity onPress={() => setSearchQuery('')}>
+                                        <MaterialIcons name="cancel" size={20} color={theme.colors.secondaryText} />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+                        </View>
+
+                        <FlatList
+                            data={filteredItems}
+                            keyExtractor={(item) => item.value}
+                            renderItem={({ item }) => (
+                                <TouchableOpacity
+                                    style={[
+                                        styles.pickerItem,
+                                        item.value === selectedValue && styles.selectedPickerItem,
+                                    ]}
+                                    onPress={() => handleSelect(item.value)}
+                                >
+                                    <Text style={[
+                                        styles.pickerItemText,
+                                        item.value === selectedValue && styles.selectedPickerItemText,
+                                    ]}>
+                                        {item.label}
+                                    </Text>
+                                    {item.value === selectedValue && (
+                                        <MaterialIcons name="check" size={20} color={theme.colors.accent} />
+                                    )}
+                                </TouchableOpacity>
+                            )}
+                            contentContainerStyle={styles.listContent}
+                            keyboardShouldPersistTaps="handled"
+                            ListEmptyComponent={
+                                <View style={styles.emptyContainer}>
+                                    <Text style={styles.emptyText}>Sonuç bulunamadı</Text>
+                                </View>
+                            }
+                        />
+                    </GlassView>
+                </View>
+            </Modal>
+        </View>
+    );
+};
 
 const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
     const {
@@ -157,30 +302,24 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
 
     // Memoize picker items
     const countryItems = useMemo(() => {
-        return [
-            <Picker.Item key="default" label="Ülke Seçiniz" value="" />,
-            ...countries.map((country: PlaceItem) => (
-                <Picker.Item key={country.id} label={country.name} value={country.id.toString()} />
-            )),
-        ];
+        return countries.map((country: PlaceItem) => ({
+            label: country.name,
+            value: country.id.toString(),
+        }));
     }, [countries]);
 
     const cityItems = useMemo(() => {
-        return [
-            <Picker.Item key="default" label="Şehir Seçiniz" value="" />,
-            ...cities.map((city: PlaceItem) => (
-                <Picker.Item key={city.id} label={city.name} value={city.id.toString()} />
-            )),
-        ];
+        return cities.map((city: PlaceItem) => ({
+            label: city.name,
+            value: city.id.toString(),
+        }));
     }, [cities]);
 
     const districtItems = useMemo(() => {
-        return [
-            <Picker.Item key="default" label="İlçe Seçiniz" value="" />,
-            ...districts.map((district: PlaceItem) => (
-                <Picker.Item key={district.id} label={district.name} value={district.id.toString()} />
-            )),
-        ];
+        return districts.map((district: PlaceItem) => ({
+            label: district.name,
+            value: district.id.toString(),
+        }));
     }, [districts]);
 
     if (loading) {
@@ -216,49 +355,37 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
 
     return (
         <View style={styles.container}>
-            <View style={styles.pickerContainer}>
-                <Text style={styles.label}>Ülke</Text>
-                <View style={styles.pickerWrapper}>
-                    <Picker
-                        selectedValue={selectedLocation.country?.id.toString() || ''}
-                        onValueChange={handleCountryChange}
-                        style={styles.picker}
-                        dropdownIconColor={theme.colors.text}
-                    >
-                        {countryItems}
-                    </Picker>
-                </View>
-            </View>
+            <CustomPicker
+                label="Ülke"
+                items={countryItems}
+                selectedValue={selectedLocation.country?.id.toString() || ''}
+                onValueChange={handleCountryChange}
+                placeholder="Ülke Seçiniz"
+                theme={theme}
+                styles={styles}
+            />
 
-            <View style={styles.pickerContainer}>
-                <Text style={styles.label}>Şehir</Text>
-                <View style={[styles.pickerWrapper, !selectedLocation.country && styles.disabledPicker]}>
-                    <Picker
-                        selectedValue={selectedLocation.city?.id.toString() || ''}
-                        onValueChange={handleCityChange}
-                        style={styles.picker}
-                        enabled={!!selectedLocation.country}
-                        dropdownIconColor={theme.colors.text}
-                    >
-                        {cityItems}
-                    </Picker>
-                </View>
-            </View>
+            <CustomPicker
+                label="Şehir"
+                items={cityItems}
+                selectedValue={selectedLocation.city?.id.toString() || ''}
+                onValueChange={handleCityChange}
+                placeholder="Şehir Seçiniz"
+                enabled={!!selectedLocation.country}
+                theme={theme}
+                styles={styles}
+            />
 
-            <View style={styles.pickerContainer}>
-                <Text style={styles.label}>İlçe</Text>
-                <View style={[styles.pickerWrapper, !selectedLocation.city && styles.disabledPicker]}>
-                    <Picker
-                        selectedValue={selectedLocation.district?.id.toString() || ''}
-                        onValueChange={handleDistrictChange}
-                        style={styles.picker}
-                        enabled={!!selectedLocation.city}
-                        dropdownIconColor={theme.colors.text}
-                    >
-                        {districtItems}
-                    </Picker>
-                </View>
-            </View>
+            <CustomPicker
+                label="İlçe"
+                items={districtItems}
+                selectedValue={selectedLocation.district?.id.toString() || ''}
+                onValueChange={handleDistrictChange}
+                placeholder="İlçe Seçiniz"
+                enabled={!!selectedLocation.city}
+                theme={theme}
+                styles={styles}
+            />
 
             {selectedLocation.country && selectedLocation.city && selectedLocation.district && (
                 <TouchableOpacity
@@ -322,23 +449,110 @@ const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number)
             color: theme.colors.secondaryText,
             marginLeft: 4,
         },
-        pickerWrapper: {
+        pickerButton: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            height: 50,
+            paddingHorizontal: 15,
             borderRadius: 12,
             borderWidth: 1,
             borderColor: theme.colors.cardBorder,
-            backgroundColor: theme.type === 'light' ? '#F0F0F0' : 'rgba(255,255,255,0.1)',
-            overflow: 'hidden',
+            backgroundColor: theme.type === 'light' ? '#F0F0F0' : 'rgba(255,255,255,0.05)',
+        },
+        pickerButtonText: {
+            fontSize: 16,
+            color: theme.colors.text,
+            flex: 1,
+        },
+        placeholderText: {
+            color: theme.colors.secondaryText,
         },
         disabledPicker: {
             opacity: 0.5,
-            backgroundColor: theme.type === 'light' ? '#E0E0E0' : 'rgba(0,0,0,0.05)',
+            backgroundColor: theme.type === 'light' ? '#E0E0E0' : 'rgba(0,0,0,0.02)',
         },
-        picker: {
+        // Modal Styles
+        modalOverlay: {
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+        },
+        pickerModalContent: {
             width: '100%',
-            height: 50,
-            color: theme.colors.text,
-            backgroundColor: 'transparent',
+            maxHeight: '80%',
+            borderRadius: 20,
+            overflow: 'hidden',
+            flex: 1,
         },
+        pickerModalHeader: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: 16,
+        },
+        pickerModalTitle: {
+            fontSize: 18,
+            fontWeight: 'bold',
+            color: theme.colors.text,
+        },
+        closeButton: {
+            padding: 4,
+        },
+        searchContainer: {
+            padding: 16,
+        },
+        searchWrapper: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: theme.type === 'light' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.1)',
+            borderRadius: 12,
+            paddingHorizontal: 12,
+            height: 46,
+        },
+        searchIcon: {
+            marginRight: 8,
+        },
+        searchInput: {
+            flex: 1,
+            height: '100%',
+            color: theme.colors.text,
+            fontSize: 16,
+        },
+        listContent: {
+            paddingVertical: 8,
+        },
+        pickerItem: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            paddingVertical: 14,
+            paddingHorizontal: 20,
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: theme.colors.cardBorder + '40',
+        },
+        selectedPickerItem: {
+            backgroundColor: theme.colors.accent + '15',
+        },
+        pickerItemText: {
+            fontSize: 16,
+            color: theme.colors.text,
+        },
+        selectedPickerItemText: {
+            color: theme.colors.accent,
+            fontWeight: '600',
+        },
+        emptyContainer: {
+            padding: 20,
+            alignItems: 'center',
+        },
+        emptyText: {
+            color: theme.colors.secondaryText,
+            fontSize: 16,
+        },
+        // Confirm Button
         confirmButton: {
             marginTop: 10,
             height: 50,
@@ -395,13 +609,6 @@ const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number)
             fontWeight: 'bold',
         },
         // Aynı Konum Modal Stilleri
-        modalOverlay: {
-            flex: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            justifyContent: 'center',
-            alignItems: 'center',
-            padding: 20,
-        },
         sameLocationModal: {
             borderRadius: 20,
             width: '90%',

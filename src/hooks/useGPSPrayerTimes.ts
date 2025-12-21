@@ -140,12 +140,17 @@ export const useGPSPrayerTimes = (timezone?: string) => {
         const dataToUse = prayerTimesData || gpsPrayerTimes;
 
         if (dataToUse.length > 0) {
+            // Eğer zaten bugünün verisi gösteriliyorsa ve tarih değişmediyse işlem yapma
+            if (currentDayPrayerTime && currentDayPrayerTime.date.split('T')[0] === today) {
+                return;
+            }
+
             const currentDay = dataToUse.find(pt => pt.date.split('T')[0] === today);
             if (currentDay) {
                 setCurrentDayPrayerTime(currentDay);
             }
         }
-    }, [gpsPrayerTimes, timezone]);
+    }, [gpsPrayerTimes, timezone, currentDayPrayerTime]);
 
     // setGpsPrayerTimes için wrapper - aynı zamanda currentDayPrayerTime'ı da günceller
     const setGpsPrayerTimesWithUpdate = useCallback((newPrayerTimes: PrayerTime[]) => {
@@ -272,10 +277,10 @@ export const useGPSPrayerTimes = (timezone?: string) => {
     useEffect(() => {
         updateCurrentDayPrayerTime();
 
-        // Her dakika günü kontrol et
+        // Her saniye günü kontrol et (Gece yarısı geçişini anlık yakalamak için)
         const interval = setInterval(() => {
             updateCurrentDayPrayerTime();
-        }, 60000); // Her dakika kontrol et
+        }, 1000); // Her saniye kontrol et
 
         // Her saat cache durumunu kontrol et (30 günlük veri kontrolü)
         const hourlyCheck = setInterval(() => {

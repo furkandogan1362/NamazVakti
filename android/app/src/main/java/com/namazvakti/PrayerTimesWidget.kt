@@ -125,10 +125,18 @@ class PrayerTimesWidget : AppWidgetProvider() {
                     val city = monthlyObj.optString("city", "")
                     val district = monthlyObj.optString("district", "")
                     val fullLocation = if (country.isNotEmpty() && city.isNotEmpty()) {
-                        if (district.isNotEmpty() && district != city) {
-                            "$country, $city, $district"
+                        if (country.equals(city, ignoreCase = true)) {
+                            if (district.isNotEmpty() && !district.equals(city, ignoreCase = true)) {
+                                "$country, $district"
+                            } else {
+                                country
+                            }
                         } else {
-                            "$country, $city"
+                            if (district.isNotEmpty() && !district.equals(city, ignoreCase = true)) {
+                                "$country, $city, $district"
+                            } else {
+                                "$country, $city"
+                            }
                         }
                     } else {
                         locationName
@@ -196,10 +204,18 @@ class PrayerTimesWidget : AppWidgetProvider() {
                         val city = times.optString("city", "")
                         val district = times.optString("district", "")
                         val fullLocation = if (country.isNotEmpty() && city.isNotEmpty()) {
-                            if (district.isNotEmpty() && district != city) {
-                                "$country, $city, $district"
+                            if (country.equals(city, ignoreCase = true)) {
+                                if (district.isNotEmpty() && !district.equals(city, ignoreCase = true)) {
+                                    "$country, $district"
+                                } else {
+                                    country
+                                }
                             } else {
-                                "$country, $city"
+                                if (district.isNotEmpty() && !district.equals(city, ignoreCase = true)) {
+                                    "$country, $city, $district"
+                                } else {
+                                    "$country, $city"
+                                }
                             }
                         } else {
                             locationName
