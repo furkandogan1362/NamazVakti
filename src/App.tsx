@@ -28,6 +28,7 @@ import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { useLocationData } from './hooks/useLocationData';
 import { usePrayerTimes } from './hooks/usePrayerTimes';
 import { useGPSPrayerTimes } from './hooks/useGPSPrayerTimes';
+import { useLocationTime } from './hooks/useLocationTime';
 import { useLocationChangeCheck } from './hooks/useLocationChangeCheck';
 import { DiyanetService } from './api/apiDiyanet';
 import * as storageService from './services/storageService';
@@ -64,8 +65,16 @@ const AppContent: React.FC = () => {
     const { isOnline } = useNetwork();
     const { selectedLocation, setSelectedLocation } = useLocation();
     const { theme, toggleTheme, isSmallScreen, screenWidth, fadeAnim } = useTheme();
-    const { currentDayPrayerTime, allPrayerTimes, setAllPrayerTimes } = usePrayerTimes();
-    const { gpsPrayerTimes, currentDayPrayerTime: gpsCurrentDayPrayerTime, isGPSMode, refreshGPSPrayerTimes, setGpsPrayerTimes: setGPSPrayerTimesHook, setIsGPSMode } = useGPSPrayerTimes();
+
+    // Seçili konumun saat dilimini al
+    const { timezone } = useLocationTime({
+        country: selectedLocation.country?.name || '',
+        city: selectedLocation.city?.name || '',
+        region: selectedLocation.district?.name || '',
+    });
+
+    const { currentDayPrayerTime, allPrayerTimes, setAllPrayerTimes } = usePrayerTimes(timezone);
+    const { gpsPrayerTimes, currentDayPrayerTime: gpsCurrentDayPrayerTime, isGPSMode, refreshGPSPrayerTimes, setGpsPrayerTimes: setGPSPrayerTimesHook, setIsGPSMode } = useGPSPrayerTimes(timezone);
     useLocationData();
     const { showChangeModal, newLocation, setShowChangeModal } = useLocationChangeCheck();
 
@@ -139,8 +148,13 @@ const AppContent: React.FC = () => {
             if (!hasLocation && !cachedPrayerData && !gpsCityInfo && !cachedGpsPrayerTimes) {
                 // İlk kullanıcı - konum yöntemi seçim ekranını göster (GPS mi Manuel mi?)
                 if (isOnline) {
+                    // Sadece ilk açılışta ve veri yoksa göster
                     setShowLocationMethodModal(true);
                 }
+            } else if (!hasLocation && !gpsCityInfo && isOnline) {
+                // Konum verisi yoksa ama cache varsa (örn: veri silinmişse)
+                // Otomatik açılmasını engellemek için burayı boş bırakıyoruz
+                // Kullanıcı manuel olarak konum seçmeli
             }
 
             setInitialCheckDone(true);
@@ -155,18 +169,31 @@ const AppContent: React.FC = () => {
     useEffect(() => {
         if (isGPSMode && isOnline && gpsPrayerTimes.length > 0) {
             // Bugünden itibaren yeterli veri var mı kontrol et
-            const getTurkeyDate = (): string => {
+            const getLocalTodayDate = (): string => {
                 const now = new Date();
-                const utcTime = now.getTime();
-                const turkeyOffset = 3 * 60 * 60 * 1000;
-                const turkeyTime = new Date(utcTime + turkeyOffset);
-                const year = turkeyTime.getUTCFullYear();
-                const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
-                const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
+
+                if (timezone) {
+                    try {
+                        const options: Intl.DateTimeFormatOptions = {
+                            timeZone: timezone,
+                            year: 'numeric',
+                            month: '2-digit',
+                            day: '2-digit',
+                        };
+                        const formatter = new Intl.DateTimeFormat('en-CA', options);
+                        return formatter.format(now);
+                    } catch (e) {
+                        console.warn('Invalid timezone for date calculation:', timezone);
+                    }
+                }
+
+                const year = now.getFullYear();
+                const month = String(now.getMonth() + 1).padStart(2, '0');
+                const day = String(now.getDate()).padStart(2, '0');
                 return `${year}-${month}-${day}`;
             };
 
-            const today = getTurkeyDate();
+            const today = getLocalTodayDate();
             const todayIndex = gpsPrayerTimes.findIndex(pt => pt.date.split('T')[0] === today);
 
             if (todayIndex === -1 || (gpsPrayerTimes.length - todayIndex) < 30) {
@@ -174,7 +201,7 @@ const AppContent: React.FC = () => {
                 refreshGPSPrayerTimes();
             }
         }
-    }, [isGPSMode, isOnline, gpsPrayerTimes, refreshGPSPrayerTimes]);
+    }, [isGPSMode, isOnline, gpsPrayerTimes, refreshGPSPrayerTimes, timezone]);
 
     // Konum değişikliklerini takip et - TAM seçim yapılana kadar eski konumu sakla
     useEffect(() => {

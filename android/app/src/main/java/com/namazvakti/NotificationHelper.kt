@@ -113,26 +113,34 @@ object NotificationHelper {
             else -> ""
         }
 
-        fun formatTime(name: String, time: String, isCurrent: Boolean): String {
-            // Vurgu rengi olarak yeşil (#4CAF50) kullanıyoruz
-            return if (isCurrent) "<font color='#4CAF50'><b>$name: $time</b></font>" else "$name: $time"
+        val sb = android.text.SpannableStringBuilder()
+
+        fun appendTime(name: String, time: String, isCurrent: Boolean, isLastInLine: Boolean) {
+            val start = sb.length
+            // Mevcut vakit ise başına işaret koy
+            val text = if (isCurrent) "▶ $name: $time" else "$name: $time"
+            sb.append(text)
+            val end = sb.length
+
+            if (isCurrent) {
+                // Sadece Kalın Font (Renk yok)
+                sb.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), start, end, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
+
+            if (!isLastInLine) {
+                sb.append("  •  ")
+            }
         }
 
-        val p1 = formatTime("İmsak", fajr, currentPrayer == "İmsak")
-        val p2 = formatTime("Güneş", sun, currentPrayer == "Güneş")
-        val p3 = formatTime("Öğle", dhuhr, currentPrayer == "Öğle")
-        val p4 = formatTime("İkindi", asr, currentPrayer == "İkindi")
-        val p5 = formatTime("Akşam", maghrib, currentPrayer == "Akşam")
-        val p6 = formatTime("Yatsı", isha, currentPrayer == "Yatsı")
+        appendTime("İmsak", fajr, currentPrayer == "İmsak", false)
+        appendTime("Güneş", sun, currentPrayer == "Güneş", false)
+        appendTime("Öğle", dhuhr, currentPrayer == "Öğle", true)
+        sb.append("\n")
+        appendTime("İkindi", asr, currentPrayer == "İkindi", false)
+        appendTime("Akşam", maghrib, currentPrayer == "Akşam", false)
+        appendTime("Yatsı", isha, currentPrayer == "Yatsı", true)
 
-        val bigTextHtml = "$p1  •  $p2  •  $p3<br/>$p4  •  $p5  •  $p6"
-
-        val bigTextSpanned = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            Html.fromHtml(bigTextHtml, Html.FROM_HTML_MODE_LEGACY)
-        } else {
-            @Suppress("DEPRECATION")
-            Html.fromHtml(bigTextHtml)
-        }
+        val bigTextSpanned = sb
 
         // Determine small icon based on remaining time
         var smallIconResId = R.mipmap.namazvakti_logo5

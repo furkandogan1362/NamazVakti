@@ -54,25 +54,39 @@ const transformPrayerData = (apiData: PrayerTimeData[]): PrayerTime[] => {
     });
 };
 
-// Türkiye saat diliminde bugünün tarihini al
-const getTurkeyDate = (): string => {
+// Yerel saat diliminde bugünün tarihini al
+const getLocalTodayDate = (timezone?: string): string => {
     const now = new Date();
-    const utcTime = now.getTime();
-    const turkeyOffset = 3 * 60 * 60 * 1000; // UTC+3
-    const turkeyTime = new Date(utcTime + turkeyOffset);
 
-    const year = turkeyTime.getUTCFullYear();
-    const month = String(turkeyTime.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(turkeyTime.getUTCDate()).padStart(2, '0');
+    if (timezone) {
+        try {
+            // Hedef saat diliminde tarihi al (YYYY-MM-DD formatında)
+            const options: Intl.DateTimeFormatOptions = {
+                timeZone: timezone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+            };
+            // en-CA formatı YYYY-MM-DD verir
+            const formatter = new Intl.DateTimeFormat('en-CA', options);
+            return formatter.format(now);
+        } catch (e) {
+            console.warn('Invalid timezone for date calculation:', timezone);
+        }
+    }
+
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
 
     return `${year}-${month}-${day}`;
 };
 
 // Bugünden itibaren belirtilen gün sayısı kadar veri var mı kontrol et
-const hasEnoughFutureData = (prayerTimes: PrayerTime[], daysNeeded: number): boolean => {
+const hasEnoughFutureData = (prayerTimes: PrayerTime[], daysNeeded: number, timezone?: string): boolean => {
     if (prayerTimes.length === 0) {return false;}
 
-    const today = getTurkeyDate();
+    const today = getLocalTodayDate(timezone);
     const todayIndex = prayerTimes.findIndex(pt => pt.date.split('T')[0] === today);
 
     if (todayIndex === -1) {return false;}
@@ -81,7 +95,7 @@ const hasEnoughFutureData = (prayerTimes: PrayerTime[], daysNeeded: number): boo
     return remainingDays >= daysNeeded;
 };
 
-export const usePrayerTimes = () => {
+export const usePrayerTimes = (timezone?: string) => {
     const [allPrayerTimes, setAllPrayerTimes] = useState<PrayerTime[]>([]);
     const [currentDayPrayerTime, setCurrentDayPrayerTime] = useState<PrayerTime | null>(null);
     const [lastFetchDate, setLastFetchDate] = useState<Date | null>(null);
@@ -96,7 +110,7 @@ export const usePrayerTimes = () => {
     }, [allPrayerTimes]);
 
     const updateCurrentDayPrayerTime = useCallback(() => {
-        const today = getTurkeyDate();
+        const today = getLocalTodayDate(timezone);
 
         if (allPrayerTimes.length > 0) {
             const currentDay = allPrayerTimes.find(pt => {
@@ -111,7 +125,7 @@ export const usePrayerTimes = () => {
                 setCurrentDayPrayerTime(allPrayerTimes[0]);
             }
         }
-    }, [allPrayerTimes]);
+    }, [allPrayerTimes, timezone]);
 
     const fetchPrayerTimes = useCallback(async () => {
         // İnternet yoksa direkt cache'den yükle
@@ -138,14 +152,14 @@ export const usePrayerTimes = () => {
         const locationChanged = !isFirstSelection && lastLocationId !== districtId;
 
         // Bugünün verisi var mı kontrol et
-        const today = getTurkeyDate();
+        const today = getLocalTodayDate(timezone);
         const hasDataForToday = allPrayerTimesRef.current.some(pt => {
             const ptDate = pt.date.split('T')[0];
             return ptDate === today;
         });
 
         // Yeterli veri var mı?
-        const hasEnoughData = hasEnoughFutureData(allPrayerTimesRef.current, 30);
+        const hasEnoughData = hasEnoughFutureData(allPrayerTimesRef.current, 30, timezone);
 
         // Cache'deki verilerde gregorianDateLong var mı kontrol et (eski cache için yeniden fetch)
         const hasDateFields = allPrayerTimesRef.current.length > 0 &&

@@ -24,6 +24,10 @@ export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
     const { isOnline } = useNetwork();
 
     useEffect(() => {
+        // Konum değiştiğinde timezone'u hemen cihazın varsayılanına sıfırla
+        // Bu sayede yeni konum yüklenirken eski konumun saat dilimi (örn: Singapur) kullanılmaz
+        setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
+
         const fetchTimezone = async () => {
             if (!country || !city) {return;}
 

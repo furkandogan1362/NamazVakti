@@ -51,6 +51,8 @@ export const updateWidget = async (
             asr: prayerTimes.asr,
             maghrib: prayerTimes.maghrib,
             isha: prayerTimes.isha,
+            gregorianDateLong: prayerTimes.gregorianDateLong || '',
+            hijriDateLong: prayerTimes.hijriDateLong || '',
             country: locationDetail?.country || '',
             city: locationDetail?.city || '',
             district: locationDetail?.district || '',
@@ -105,6 +107,8 @@ export const syncWidgetMonthlyCache = async (
             asr: pt.asr,
             maghrib: pt.maghrib,
             isha: pt.isha,
+            gregorianDateLong: pt.gregorianDateLong || '',
+            hijriDateLong: pt.hijriDateLong || '',
         }));
 
         const monthlyPayload = {
@@ -123,6 +127,8 @@ export const syncWidgetMonthlyCache = async (
             asr: days[0]?.asr || '',
             maghrib: days[0]?.maghrib || '',
             isha: days[0]?.isha || '',
+            gregorianDateLong: days[0]?.gregorianDateLong || '',
+            hijriDateLong: days[0]?.hijriDateLong || '',
             country: monthlyPayload.country,
             city: monthlyPayload.city,
             district: monthlyPayload.district,

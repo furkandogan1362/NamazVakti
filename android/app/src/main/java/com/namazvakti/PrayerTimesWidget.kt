@@ -157,6 +157,8 @@ class PrayerTimesWidget : AppWidgetProvider() {
                                     put("asr", dayObj.optString("asr"))
                                     put("maghrib", dayObj.optString("maghrib"))
                                     put("isha", dayObj.optString("isha"))
+                                    put("gregorianDateLong", dayObj.optString("gregorianDateLong"))
+                                    put("hijriDateLong", dayObj.optString("hijriDateLong"))
                                     put("timezoneId", tzId)
                                     put("country", country)
                                     put("city", city)
@@ -211,6 +213,24 @@ class PrayerTimesWidget : AppWidgetProvider() {
                     views.setTextViewText(R.id.asr_time, asr)
                     views.setTextViewText(R.id.maghrib_time, maghrib)
                     views.setTextViewText(R.id.isha_time, isha)
+
+                    // Set Dates
+                    val gregorianDateLong = times.optString("gregorianDateLong", "")
+                    val hijriDateLong = times.optString("hijriDateLong", "")
+                    
+                    if (gregorianDateLong.isNotEmpty()) {
+                        views.setTextViewText(R.id.gregorian_date_text, gregorianDateLong)
+                        views.setViewVisibility(R.id.gregorian_date_text, android.view.View.VISIBLE)
+                    } else {
+                        views.setViewVisibility(R.id.gregorian_date_text, android.view.View.GONE)
+                    }
+
+                    if (hijriDateLong.isNotEmpty()) {
+                        views.setTextViewText(R.id.hijri_date_text, hijriDateLong)
+                        views.setViewVisibility(R.id.hijri_date_text, android.view.View.VISIBLE)
+                    } else {
+                        views.setViewVisibility(R.id.hijri_date_text, android.view.View.GONE)
+                    }
 
                     // Get Timezone ID from JSON (e.g. "Europe/Istanbul")
                     // Default to device timezone if not provided
