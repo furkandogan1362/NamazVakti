@@ -346,3 +346,22 @@ export const clearManualData = async (): Promise<void> => {
         console.error('Error clearing manual data:', error);
     }
 };
+
+// Kalibrasyon uyarısı tercihi
+export const saveCalibrationPreference = async (dontShowAgain: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('calibrationPreference', JSON.stringify(dontShowAgain));
+    } catch (error) {
+        console.error('Error saving calibration preference:', error);
+    }
+};
+
+export const loadCalibrationPreference = async (): Promise<boolean> => {
+    try {
+        const savedPreference = await AsyncStorage.getItem('calibrationPreference');
+        return savedPreference ? JSON.parse(savedPreference) : false;
+    } catch (error) {
+        console.error('Error loading calibration preference:', error);
+        return false;
+    }
+};

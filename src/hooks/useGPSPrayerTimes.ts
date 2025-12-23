@@ -102,6 +102,18 @@ export const useGPSPrayerTimes = (timezone?: string) => {
         gpsPrayerTimesRef.current = gpsPrayerTimes;
     }, [gpsPrayerTimes]);
 
+    // setGpsPrayerTimes için wrapper - aynı zamanda currentDayPrayerTime'ı da günceller
+    const setGpsPrayerTimesWithUpdate = useCallback((newPrayerTimes: PrayerTime[]) => {
+        setGpsPrayerTimes(newPrayerTimes);
+
+        // Hemen currentDayPrayerTime'ı da güncelle
+        const today = getLocalTodayDate(timezone);
+        const currentDay = newPrayerTimes.find(pt => pt.date.split('T')[0] === today);
+        if (currentDay) {
+            setCurrentDayPrayerTime(currentDay);
+        }
+    }, [timezone]);
+
     // Konum modunu dinle ve değişiklikleri takip et
     const checkLocationMode = useCallback(async () => {
         const locationMode = await loadLocationMode();
@@ -132,7 +144,7 @@ export const useGPSPrayerTimes = (timezone?: string) => {
                 setGpsPrayerTimesWithUpdate(cachedTimes);
             }
         }
-    }, [isGPSMode, gpsCityId]);
+    }, [isGPSMode, gpsCityId, setGpsPrayerTimesWithUpdate]);
 
     // Bugünün namazını güncelle
     const updateCurrentDayPrayerTime = useCallback((prayerTimesData?: PrayerTime[]) => {
@@ -151,18 +163,6 @@ export const useGPSPrayerTimes = (timezone?: string) => {
             }
         }
     }, [gpsPrayerTimes, timezone, currentDayPrayerTime]);
-
-    // setGpsPrayerTimes için wrapper - aynı zamanda currentDayPrayerTime'ı da günceller
-    const setGpsPrayerTimesWithUpdate = useCallback((newPrayerTimes: PrayerTime[]) => {
-        setGpsPrayerTimes(newPrayerTimes);
-
-        // Hemen currentDayPrayerTime'ı da güncelle
-        const today = getLocalTodayDate(timezone);
-        const currentDay = newPrayerTimes.find(pt => pt.date.split('T')[0] === today);
-        if (currentDay) {
-            setCurrentDayPrayerTime(currentDay);
-        }
-    }, [timezone]);
 
     // GPS namaz vakitlerini çek
     const fetchGPSPrayerTimes = useCallback(async (forceRefresh: boolean = false) => {
@@ -238,7 +238,7 @@ export const useGPSPrayerTimes = (timezone?: string) => {
             console.log('✅ GPS namaz vakitleri cache\'de mevcut, API çağrısı yapılmadı.');
             console.log(`   Bugünün verisi: ${hasDataForToday}, Yeterli veri: ${hasEnoughData}`);
         }
-    }, [isOnline]);
+    }, [isOnline, timezone]);
 
     // İlk yüklemede verileri yükle
     useEffect(() => {

@@ -60,7 +60,7 @@ const WidgetPermissionsModal: React.FC<WidgetPermissionsModalProps> = ({ visible
                                 <Text style={styles.permissionTitle}>Kilit Ekranı Bildirimi</Text>
                                 <Text style={styles.permissionDesc}>Xiaomi/MIUI için kilit ekranı bildirim ayarlarını açar.</Text>
                             </View>
-                            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#9C27B0' }]} onPress={openLockScreenNotificationSettings}>
+                            <TouchableOpacity style={[styles.actionButton, styles.purpleButton]} onPress={openLockScreenNotificationSettings}>
                                 <Text style={styles.actionButtonText}>Ayarları Aç</Text>
                             </TouchableOpacity>
                         </View>
@@ -100,7 +100,7 @@ const WidgetPermissionsModal: React.FC<WidgetPermissionsModalProps> = ({ visible
                                 <Text style={styles.permissionTitle}>Bildirimi Başlat</Text>
                                 <Text style={styles.permissionDesc}>Kalıcı namaz vakti bildirimini şimdi başlat.</Text>
                             </View>
-                            <TouchableOpacity style={[styles.actionButton, { backgroundColor: '#4CAF50' }]} onPress={startNotificationService}>
+                            <TouchableOpacity style={[styles.actionButton, styles.greenButton]} onPress={startNotificationService}>
                                 <Text style={styles.actionButtonText}>Başlat</Text>
                             </TouchableOpacity>
                         </View>
@@ -207,6 +207,12 @@ const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number)
             color: '#FFFFFF',
             fontSize: 12,
             fontWeight: 'bold',
+        },
+        purpleButton: {
+            backgroundColor: '#9C27B0',
+        },
+        greenButton: {
+            backgroundColor: '#4CAF50',
         },
         noteContainer: {
             marginTop: 10,

@@ -24,12 +24,184 @@ import Animated, {
     useSharedValue,
     useAnimatedStyle,
     withSpring,
+    withRepeat,
+    withTiming,
+    Easing,
+    useAnimatedProps,
+    cancelAnimation,
 } from 'react-native-reanimated';
-import Svg, { Circle, Line, G, Polygon } from 'react-native-svg';
+import Svg, { Circle, Line, G, Polygon, Path } from 'react-native-svg';
 import { useTheme } from '../contexts/ThemeContext';
 import GlassView from './ui/GlassView';
 import { DiyanetService, CityDetail } from '../api/apiDiyanet';
-import { loadGPSCityInfo, loadLocationMode, loadLocationData } from '../services/storageService';
+import { loadGPSCityInfo, loadLocationMode, loadLocationData, saveCalibrationPreference, loadCalibrationPreference } from '../services/storageService';
+
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+const CalibrationOverlay: React.FC<{
+    visible: boolean;
+    onClose: (dontShowAgain: boolean) => void;
+    theme: any;
+}> = ({ visible, onClose, theme }) => {
+    const [dontShowAgain, setDontShowAgain] = useState(false);
+    const progress = useSharedValue(0);
+
+    useEffect(() => {
+        if (visible) {
+            progress.value = withRepeat(
+                withTiming(2 * Math.PI, {
+                    duration: 4000,
+                    easing: Easing.linear,
+                }),
+                -1,
+                false
+            );
+        } else {
+            cancelAnimation(progress);
+            progress.value = 0;
+        }
+        return () => {
+            cancelAnimation(progress);
+        };
+    }, [visible, progress]);
+
+    const animatedProps = useAnimatedProps(() => {
+        const t = progress.value;
+        // Figure 8 trajectory
+        // x = 100 + 50 * cos(t)
+        // y = 50 + 25 * sin(2t)
+        return {
+            cx: 100 + 50 * Math.cos(t),
+            cy: 50 + 25 * Math.sin(2 * t),
+        };
+    });
+
+    if (!visible) { return null; }
+
+    // Modal arka plan rengini belirle (opaklık 0.99)
+    const modalBackgroundColor = theme.type === 'dark'
+        ? 'rgba(39, 39, 42, 0.99)' // Zinc 800
+        : 'rgba(255, 255, 255, 0.99)';
+
+    const styles = StyleSheet.create({
+        overlay: {
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+        },
+        modal: {
+            backgroundColor: modalBackgroundColor,
+            padding: 24,
+            borderRadius: 16,
+            width: '85%',
+            alignItems: 'center',
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+        },
+        title: {
+            color: theme.colors.text,
+            fontSize: 20,
+            fontWeight: 'bold',
+            marginBottom: 16,
+        },
+        description: {
+            color: theme.colors.secondaryText,
+            textAlign: 'center',
+            marginBottom: 24,
+            fontSize: 16,
+        },
+        checkboxContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginTop: 24,
+            marginBottom: 20,
+        },
+        checkbox: {
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            borderWidth: 2,
+            borderColor: theme.colors.accent,
+            marginRight: 10,
+            justifyContent: 'center',
+            alignItems: 'center',
+        },
+        checkboxInner: {
+            width: 12,
+            height: 12,
+            backgroundColor: theme.colors.accent,
+            borderRadius: 2,
+        },
+        checkboxLabel: {
+            color: theme.colors.text,
+            fontSize: 14,
+        },
+        button: {
+            backgroundColor: theme.colors.accent,
+            paddingVertical: 12,
+            paddingHorizontal: 40,
+            borderRadius: 12,
+        },
+        buttonText: {
+            color: '#fff',
+            fontWeight: 'bold',
+            fontSize: 16,
+        },
+    });
+
+    return (
+        <View style={styles.overlay}>
+            <View style={styles.modal}>
+                <Text style={styles.title}>Pusula Kalibrasyonu</Text>
+                <Text style={styles.description}>
+                    Doğru sonuç için telefonunuzu 8 çizer gibi hareket ettirin.
+                    Metal eşyalardan ve manyetik alanlardan uzak durun.
+                </Text>
+
+                <Svg height="120" width="200" viewBox="0 0 200 100">
+                    <Path
+                        d="M50,50 C20,50 20,20 50,20 C80,20 80,50 50,50 C20,50 20,80 50,80 C80,80 80,50 50,50 Z M150,50 C120,50 120,20 150,20 C180,20 180,50 150,50 C120,50 120,80 150,80 C180,80 180,50 150,50 Z"
+                        fill="none"
+                        stroke={theme.colors.secondaryText}
+                        strokeWidth="2"
+                        opacity="0.3"
+                    />
+                    <Path
+                        d="M50,50 C20,50 20,20 50,20 C80,20 80,50 50,50 C20,50 20,80 50,80 C80,80 80,50 50,50 Z M150,50 C120,50 120,20 150,20 C180,20 180,50 150,50 C120,50 120,80 150,80 C180,80 180,50 150,50 Z"
+                        fill="none"
+                        stroke={theme.colors.accent}
+                        strokeWidth="3"
+                        strokeDasharray="10, 5"
+                    />
+                    <AnimatedCircle
+                        r="8"
+                        fill={theme.colors.accent}
+                        animatedProps={animatedProps}
+                    />
+                </Svg>
+
+                <TouchableOpacity
+                    style={styles.checkboxContainer}
+                    onPress={() => setDontShowAgain(!dontShowAgain)}
+                >
+                    <View style={styles.checkbox}>
+                        {dontShowAgain && <View style={styles.checkboxInner} />}
+                    </View>
+                    <Text style={styles.checkboxLabel}>Bir daha gösterme</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                    style={styles.button}
+                    onPress={() => onClose(dontShowAgain)}
+                >
+                    <Text style={styles.buttonText}>Tamam</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
+};
 
 interface QiblaCompassProps {
     visible: boolean;
@@ -38,6 +210,27 @@ interface QiblaCompassProps {
 
 const QiblaCompass: React.FC<QiblaCompassProps> = ({ visible, onClose }) => {
     const { theme, screenWidth } = useTheme();
+    const [showCalibration, setShowCalibration] = useState(false);
+
+    useEffect(() => {
+        const checkCalibrationPreference = async () => {
+            const dontShow = await loadCalibrationPreference();
+            if (!dontShow) {
+                setShowCalibration(true);
+            }
+        };
+
+        if (visible) {
+            checkCalibrationPreference();
+        }
+    }, [visible]);
+
+    const handleCalibrationClose = async (dontShowAgain: boolean) => {
+        setShowCalibration(false);
+        if (dontShowAgain) {
+            await saveCalibrationPreference(true);
+        }
+    };
     const [qiblaAngle, setQiblaAngle] = useState<number | null>(null);
     const [deviceHeading, setDeviceHeading] = useState<number>(0);
     const [cityName, setCityName] = useState<string>('');
@@ -567,6 +760,11 @@ const QiblaCompass: React.FC<QiblaCompassProps> = ({ visible, onClose }) => {
                     </View>
                 </GlassView>
             </View>
+            <CalibrationOverlay
+                visible={showCalibration}
+                onClose={handleCalibrationClose}
+                theme={theme}
+            />
         </Modal>
     );
 };

@@ -26,7 +26,7 @@ object NotificationHelper {
             val existingChannel = notificationManager.getNotificationChannel(CHANNEL_ID)
             if (existingChannel != null) {
                 // Eğer importance yanlışsa kanalı sil ve yeniden oluştur
-                if (existingChannel.importance != NotificationManager.IMPORTANCE_LOW) {
+                if (existingChannel.importance != NotificationManager.IMPORTANCE_HIGH) {
                     android.util.Log.d(TAG, "Deleting old notification channel with wrong importance")
                     notificationManager.deleteNotificationChannel(CHANNEL_ID)
                 } else {
@@ -38,7 +38,7 @@ object NotificationHelper {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Namaz Vakitleri",
-                NotificationManager.IMPORTANCE_LOW  // IMPORTANCE_LOW kullan - pop-up çıkarmaz, sessiz
+                NotificationManager.IMPORTANCE_HIGH  // IMPORTANCE_HIGH kullan - üstte görünsün
             ).apply {
                 description = "Kalıcı namaz vakti bildirimi"
                 setShowBadge(false)
@@ -48,7 +48,7 @@ object NotificationHelper {
                 enableLights(false)
             }
             notificationManager.createNotificationChannel(channel)
-            android.util.Log.d(TAG, "Notification channel created with IMPORTANCE_LOW")
+            android.util.Log.d(TAG, "Notification channel created with IMPORTANCE_HIGH")
         }
     }
 
@@ -61,12 +61,12 @@ object NotificationHelper {
         val pendingIntent = PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
         // Vakitleri al
-        val fajr = times.getString("fajr")
-        val sun = times.getString("sun")
-        val dhuhr = times.getString("dhuhr")
-        val asr = times.getString("asr")
-        val maghrib = times.getString("maghrib")
-        val isha = times.getString("isha")
+        val fajr = times.optString("fajr", "00:00")
+        val sun = times.optString("sun", "00:00")
+        val dhuhr = times.optString("dhuhr", "00:00")
+        val asr = times.optString("asr", "00:00")
+        val maghrib = times.optString("maghrib", "00:00")
+        val isha = times.optString("isha", "00:00")
 
         // Sonraki vakit saatini bul
         val nextPrayerTime = when (nextPrayerName) {
@@ -166,14 +166,13 @@ object NotificationHelper {
                 .setSummaryText(remainingTextLong))  // Alt satırda açık metin
             .setOngoing(true)
             .setContentIntent(pendingIntent)
-            .setPriority(NotificationCompat.PRIORITY_LOW)  // LOW priority - sessiz bildirim
+            .setPriority(NotificationCompat.PRIORITY_MAX)  // MAX priority - en üstte görünsün
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)  // SERVICE kategorisi - alarm değil
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setShowWhen(false)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
-            .setSilent(true)
             .setSound(null)  // Ses yok
             .setVibrate(null)  // Titreşim yok
             .build()

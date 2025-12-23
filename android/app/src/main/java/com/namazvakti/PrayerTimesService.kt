@@ -72,9 +72,10 @@ class PrayerTimesService : Service() {
                 .setColor(android.graphics.Color.WHITE)
                 .setContentTitle("Namaz Vakitleri")
                 .setContentText("Yükleniyor...")
-                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_LOW)  // LOW priority
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX)  // MAX priority
                 .setOngoing(true)
-                .setSilent(true)  // Sessiz
+                .setSound(null)
+                .setVibrate(null)
                 .setOnlyAlertOnce(true)  // Sadece bir kez bildirim
                 .build()
             startForeground(NOTIFICATION_ID, notification)
@@ -157,12 +158,19 @@ class PrayerTimesService : Service() {
         if (effectiveTimes != null) {
             try {
                 val times = effectiveTimes
-                val fajr = times.getString("fajr")
-                val sun = times.getString("sun")
-                val dhuhr = times.getString("dhuhr")
-                val asr = times.getString("asr")
-                val maghrib = times.getString("maghrib")
-                val isha = times.getString("isha")
+                val fajr = times.optString("fajr", "00:00")
+                val sun = times.optString("sun", "00:00")
+                val dhuhr = times.optString("dhuhr", "00:00")
+                val asr = times.optString("asr", "00:00")
+                val maghrib = times.optString("maghrib", "00:00")
+                val isha = times.optString("isha", "00:00")
+
+                // Veri kontrolü - eğer vakitler boşsa işlem yapma
+                if (fajr == "00:00" || fajr.isEmpty()) {
+                    android.util.Log.w(TAG, "Prayer times are empty or invalid")
+                    showErrorNotification("Veriler güncellenemedi. Uygulamayı açın.")
+                    return
+                }
 
                 val country = times.optString("country", "")
                 val city = times.optString("city", "")
@@ -256,7 +264,10 @@ class PrayerTimesService : Service() {
 
             } catch (e: Exception) {
                 android.util.Log.e(TAG, "Error updating notification", e)
+                showErrorNotification("Bir hata oluştu. Uygulamayı açın.")
             }
+        } else {
+            showErrorNotification("Veri bulunamadı. Uygulamayı açın.")
         }
     }
 
@@ -266,8 +277,31 @@ class PrayerTimesService : Service() {
         android.util.Log.d(TAG, "Service destroyed")
     }
 
+    private fun showErrorNotification(message: String) {
+        try {
+            val notification = androidx.core.app.NotificationCompat.Builder(this, "prayer_times_channel")
+                .setSmallIcon(R.mipmap.namazvakti_logo5)
+                .setColor(android.graphics.Color.WHITE)
+                .setContentTitle("Namaz Vakitleri")
+                .setContentText(message)
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .build()
+            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+            notificationManager.notify(NOTIFICATION_ID, notification)
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to show error notification", e)
+        }
+    }
+
     private fun parseTimeToSeconds(timeStr: String): Int {
-        val parts = timeStr.split(":")
-        return parts[0].toInt() * 3600 + parts[1].toInt() * 60
+        try {
+            if (timeStr.isEmpty() || !timeStr.contains(":")) return 0
+            val parts = timeStr.split(":")
+            return parts[0].toInt() * 3600 + parts[1].toInt() * 60
+        } catch (e: Exception) {
+            return 0
+        }
     }
 }
