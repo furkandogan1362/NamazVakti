@@ -77,6 +77,7 @@ const AUTH_CREDENTIALS = {
 // User-Agent: Dart/3.5 (dart:io) -> Sunucuya kendini resmi Flutter uygulaması gibi tanıtır.
 const apiClient = axios.create({
   baseURL: BASE_URL,
+  timeout: 15000, // 15 seconds timeout
   headers: {
     'User-Agent': 'Dart/3.5 (dart:io)',
     'Content-Type': 'application/json',

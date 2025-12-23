@@ -271,43 +271,36 @@ const AppContent: React.FC = () => {
             return;
         }
 
-        await saveGPSPermissionAsked();
+        // İzin bilgisini kaydet (arka planda)
+        saveGPSPermissionAsked();
 
         if (result.success && result.cityDetail && result.prayerTimes) {
-            // Konum modunu GPS olarak ayarla
-            await saveLocationMode('gps');
+            // 1. Önce UI State'lerini güncelle (Hız için)
             setLocationMode('gps');
-            setIsGPSMode(true); // Hook'u da güncelle
-
-            // Eski manuel verileri temizle
-            await clearManualData();
-
-            // GPS konum bilgisini kaydet
-            await saveGPSCityInfo({
-                id: result.cityDetail.id,
-                name: result.cityDetail.name,
-                city: result.cityDetail.city,
-                country: result.cityDetail.country,
-            });
-
-            // GPS namaz vakitlerini kaydet (30 günlük)
-            await saveGPSPrayerTimes(result.prayerTimes);
-            await saveGPSLastFetchDate(new Date());
-
-            // State'leri güncelle
+            setIsGPSMode(true);
             setGpsLocationInfo({
                 name: result.cityDetail.name,
                 city: result.cityDetail.city,
                 country: result.cityDetail.country,
             });
-
-            // GPS prayer times hook'unu güncelle (bu kritik!)
             setGPSPrayerTimesHook(result.prayerTimes);
-
-            // Manuel konum bilgisini temizle
             setSelectedLocation({ country: null, city: null, district: null });
-
             setHasCachedData(true);
+
+            // 2. Storage işlemlerini arka planda yap (UI'ı bloklamasın)
+            Promise.all([
+                saveLocationMode('gps'),
+                clearManualData(),
+                saveGPSCityInfo({
+                    id: result.cityDetail.id,
+                    name: result.cityDetail.name,
+                    city: result.cityDetail.city,
+                    country: result.cityDetail.country,
+                }),
+                saveGPSPrayerTimes(result.prayerTimes),
+                saveGPSLastFetchDate(new Date())
+            ]).catch(err => console.error('Error saving GPS data:', err));
+
         } else {
             // GPS başarısız, method seçici göster
             setShowLocationMethodModal(true);
@@ -492,7 +485,9 @@ const AppContent: React.FC = () => {
             return;
         }
 
-        setIsChangingLocation(true);
+        // Modalı hemen kapat (Kullanıcı isteği: "basar basmaz modal kapanacak")
+        setShowChangeModal(false);
+
         try {
             // Namaz vakitlerini çek
             const prayerTimesData = await DiyanetService.getPrayerTimes(newLocation.id, 'Monthly');
@@ -522,11 +517,8 @@ const AppContent: React.FC = () => {
             };
 
             await handleGPSComplete(result);
-            setShowChangeModal(false);
         } catch (error) {
             console.error('Error changing location:', error);
-        } finally {
-            setIsChangingLocation(false);
         }
     };
 

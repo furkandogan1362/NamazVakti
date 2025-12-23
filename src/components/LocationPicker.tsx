@@ -40,6 +40,9 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
 }) => {
     const [modalVisible, setModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const flatListRef = React.useRef<FlatList>(null);
+
+    const ITEM_HEIGHT = 55; // Fixed height for smoother scrolling
 
     const filteredItems = useMemo(() => {
         if (!searchQuery) {return items;}
@@ -60,6 +63,23 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
     }, [items, searchQuery]);
 
     const selectedItem = items.find(i => i.value === selectedValue);
+
+    // Scroll to selected item when modal opens
+    useEffect(() => {
+        if (modalVisible && selectedValue && filteredItems.length > 0 && !searchQuery) {
+            const index = filteredItems.findIndex(item => item.value === selectedValue);
+            if (index !== -1) {
+                // Wait for modal animation and layout
+                setTimeout(() => {
+                    flatListRef.current?.scrollToIndex({
+                        index,
+                        animated: true,
+                        viewPosition: 0.5
+                    });
+                }, 300);
+            }
+        }
+    }, [modalVisible, selectedValue]); // Removed filteredItems dependency to avoid scroll on search
 
     const handleSelect = (value: string) => {
         onValueChange(value);
@@ -122,13 +142,24 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
                         </View>
 
                         <FlatList
+                            ref={flatListRef}
                             data={filteredItems}
                             keyExtractor={(item) => item.value}
+                            getItemLayout={(data, index) => (
+                                { length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index }
+                            )}
+                            onScrollToIndexFailed={(info) => {
+                                const wait = new Promise(resolve => setTimeout(resolve, 500));
+                                wait.then(() => {
+                                    flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+                                });
+                            }}
                             renderItem={({ item }) => (
                                 <TouchableOpacity
                                     style={[
                                         styles.pickerItem,
                                         item.value === selectedValue && styles.selectedPickerItem,
+                                        { height: ITEM_HEIGHT } // Enforce fixed height
                                     ]}
                                     onPress={() => handleSelect(item.value)}
                                 >
@@ -517,8 +548,7 @@ const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number)
         },
         searchInput: {
             flex: 1,
-            height: '100%',
-            color: theme.colors.text,
+            height:theme.colors.text,
             fontSize: 16,
         },
         listContent: {

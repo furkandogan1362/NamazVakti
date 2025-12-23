@@ -188,7 +188,8 @@ export const usePrayerTimes = (timezone?: string) => {
                 setLastLocationId(districtId);
                 saveLastLocationId(districtId);
             } catch (error) {
-                console.error('Error fetching prayer times:', error);
+                // Kritik olmayan hata: Arka planda veri güncellenemedi, cache kullanılacak
+                console.warn('Warning fetching prayer times:', error);
                 const cachedTimes = await loadPrayerTimes();
                 if (cachedTimes && cachedTimes.length > 0) {
                     setAllPrayerTimes(cachedTimes);

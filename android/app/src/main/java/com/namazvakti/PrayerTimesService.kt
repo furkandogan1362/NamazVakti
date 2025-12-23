@@ -72,11 +72,15 @@ class PrayerTimesService : Service() {
                 .setColor(android.graphics.Color.WHITE)
                 .setContentTitle("Namaz Vakitleri")
                 .setContentText("Yükleniyor...")
-                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX)  // MAX priority
+                .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX)
+                .setCategory(androidx.core.app.NotificationCompat.CATEGORY_ALARM)
+                .setWhen(System.currentTimeMillis() + 3600000)  // 1 saat sonrası
+                .setShowWhen(false)  // Zamanı gösterme
+                .setSortKey("0")  // En üstte sıralansın
                 .setOngoing(true)
                 .setSound(null)
                 .setVibrate(null)
-                .setOnlyAlertOnce(true)  // Sadece bir kez bildirim
+                .setOnlyAlertOnce(true)
                 .build()
             startForeground(NOTIFICATION_ID, notification)
         } catch (e: Exception) {
@@ -274,7 +278,57 @@ class PrayerTimesService : Service() {
     override fun onDestroy() {
         super.onDestroy()
         updateRunnable?.let { handler.removeCallbacks(it) }
-        android.util.Log.d(TAG, "Service destroyed")
+        android.util.Log.d(TAG, "Service destroyed - scheduling restart")
+        
+        // Servisi yeniden başlatmak için alarm kur
+        scheduleServiceRestart()
+    }
+    
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        android.util.Log.d(TAG, "Task removed - scheduling restart")
+        
+        // Uygulama kapatıldığında servisi yeniden başlat
+        scheduleServiceRestart()
+        
+        // Servisi yeniden başlat
+        val restartServiceIntent = Intent(applicationContext, PrayerTimesService::class.java)
+        val restartServicePendingIntent = android.app.PendingIntent.getService(
+            applicationContext,
+            1,
+            restartServiceIntent,
+            android.app.PendingIntent.FLAG_ONE_SHOT or android.app.PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmManager = applicationContext.getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+        alarmManager.setExact(
+            android.app.AlarmManager.ELAPSED_REALTIME,
+            android.os.SystemClock.elapsedRealtime() + 1000,
+            restartServicePendingIntent
+        )
+    }
+    
+    private fun scheduleServiceRestart() {
+        try {
+            val restartIntent = Intent(this, ServiceRestartReceiver::class.java)
+            val pendingIntent = android.app.PendingIntent.getBroadcast(
+                this,
+                0,
+                restartIntent,
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+            
+            val alarmManager = getSystemService(Context.ALARM_SERVICE) as android.app.AlarmManager
+            val triggerTime = android.os.SystemClock.elapsedRealtime() + 1000  // 1 saniye sonra
+            
+            alarmManager.setExact(
+                android.app.AlarmManager.ELAPSED_REALTIME_WAKEUP,
+                triggerTime,
+                pendingIntent
+            )
+            android.util.Log.d(TAG, "Service restart scheduled")
+        } catch (e: Exception) {
+            android.util.Log.e(TAG, "Failed to schedule service restart", e)
+        }
     }
 
     private fun showErrorNotification(message: String) {
@@ -285,6 +339,10 @@ class PrayerTimesService : Service() {
                 .setContentTitle("Namaz Vakitleri")
                 .setContentText(message)
                 .setPriority(androidx.core.app.NotificationCompat.PRIORITY_MAX)
+                .setCategory(androidx.core.app.NotificationCompat.CATEGORY_ALARM)
+                .setWhen(System.currentTimeMillis() + 3600000)
+                .setShowWhen(false)  // Zamanı gösterme
+                .setSortKey("0")
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .build()

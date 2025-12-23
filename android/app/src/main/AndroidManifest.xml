@@ -71,5 +71,11 @@
           </intent-filter>
       </receiver>
 
+      <receiver
+          android:name=".ServiceRestartReceiver"
+          android:enabled="true"
+          android:exported="false">
+      </receiver>
+
     </application>
 </manifest>

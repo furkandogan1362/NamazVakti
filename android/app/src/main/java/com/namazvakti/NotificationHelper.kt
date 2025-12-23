@@ -38,7 +38,7 @@ object NotificationHelper {
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Namaz Vakitleri",
-                NotificationManager.IMPORTANCE_HIGH  // IMPORTANCE_HIGH kullan - üstte görünsün
+                NotificationManager.IMPORTANCE_HIGH  // IMPORTANCE_MAX - en üstte durması için
             ).apply {
                 description = "Kalıcı namaz vakti bildirimi"
                 setShowBadge(false)
@@ -46,6 +46,10 @@ object NotificationHelper {
                 setSound(null, null)
                 enableVibration(false)
                 enableLights(false)
+                // DND bypass - rahatsız etme modunda bile göster
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+                    setAllowBubbles(false)
+                }
             }
             notificationManager.createNotificationChannel(channel)
             android.util.Log.d(TAG, "Notification channel created with IMPORTANCE_HIGH")
@@ -168,9 +172,12 @@ object NotificationHelper {
             .setContentIntent(pendingIntent)
             .setPriority(NotificationCompat.PRIORITY_MAX)  // MAX priority - en üstte görünsün
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setCategory(NotificationCompat.CATEGORY_SERVICE)  // SERVICE kategorisi - alarm değil
+            .setCategory(NotificationCompat.CATEGORY_ALARM)  // ALARM kategorisi - en üstte kalması için
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .setShowWhen(false)
+            // Gelecek zaman damgası - en üstte tutma hilesi (arka planda sıralama için)
+            .setWhen(System.currentTimeMillis() + 3600000)  // 1 saat sonrası
+            .setShowWhen(false)  // Zamanı gösterme - sadece sıralama için kullan
+            .setSortKey("0")  // En üstte sıralansın
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
             .setSound(null)  // Ses yok

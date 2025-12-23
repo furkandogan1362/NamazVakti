@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNetwork } from '../contexts/NetworkContext';
 
-const TIMEZONE_CACHE_KEY = 'location_timezone_cache';
+const TIMEZONE_CACHE_KEY = 'location_timezone_cache_v2';
 
 interface LocationTimeHook {
     timezone: string;
@@ -66,6 +66,11 @@ export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
                     foundTz = await searchLocation(country);
                 }
 
+                // Fallback for Turkey if nothing found
+                if (!foundTz && (country === 'TÜRKİYE' || country === 'Turkey')) {
+                     foundTz = 'Europe/Istanbul';
+                }
+
                 if (foundTz) {
                     setTimezone(foundTz);
                     await AsyncStorage.setItem(cacheKey, foundTz);
@@ -90,27 +95,56 @@ export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
     return { timezone, loading, timeDiff };
 };
 
+const normalizeString = (str: string): string => {
+    return str
+        .replace(/İ/g, 'i')
+        .replace(/I/g, 'i')
+        .replace(/ı/g, 'i')
+        .toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]/g, '');
+};
+
 const searchLocation = async (query: string, countryFilter?: string): Promise<string | null> => {
     try {
         const response = await fetch(
-            `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=5&language=tr&format=json`
+            `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=tr&format=json`
         );
         const data = await response.json();
 
         if (data.results && data.results.length > 0) {
             // If country filter is provided, try to match
             if (countryFilter) {
-                // Normalize strings for comparison
-                const normalizedFilter = countryFilter.toLowerCase();
-                const match = data.results.find((r: any) =>
-                    (r.country && r.country.toLowerCase() === normalizedFilter) ||
-                    (r.country_code && r.country_code.toLowerCase() === normalizedFilter)
-                );
-                if (match && match.timezone) {return match.timezone;}
+                const normalizedFilter = normalizeString(countryFilter);
+                
+                const match = data.results.find((r: any) => {
+                    const countryName = r.country ? normalizeString(r.country) : '';
+                    const countryCode = r.country_code ? normalizeString(r.country_code) : '';
+                    
+                    // Special handling for Turkey
+                    if ((normalizedFilter === 'turkiye' || normalizedFilter === 'turkey') && 
+                        (countryName === 'turkiye' || countryName === 'turkey' || countryCode === 'tr')) {
+                        return true;
+                    }
+
+                    return countryName.includes(normalizedFilter) || 
+                           normalizedFilter.includes(countryName) ||
+                           countryCode === normalizedFilter;
+                });
+
+                if (match && match.timezone) {
+                    return match.timezone;
+                }
+                
+                // If country filter was provided but no match found, return null
+                // to avoid using a location from a different country (e.g. Bala, Romania instead of Bala, Turkey)
+                return null;
             }
 
-            // Return first result with a timezone
-            if (data.results[0].timezone) {return data.results[0].timezone;}
+            // Return first result with a timezone if no filter provided
+            if (data.results[0].timezone) {
+                return data.results[0].timezone;
+            }
         }
         return null;
     } catch (e) {

@@ -52,18 +52,22 @@ export const useLocationData = () => {
         const loadCountriesData = async () => {
             // Stale-while-revalidate: Önce cache'i göster
             const cachedCountries = await loadCountries();
+            let hasCache = false;
+            
             if (cachedCountries && cachedCountries.length > 0) {
                 setCountries(cachedCountries);
+                hasCache = true;
             }
 
-            // Arka planda API'den güncelle (sadece online ise)
-            if (isOnline) {
+            // Arka planda API'den güncelle (sadece online ise ve cache yoksa)
+            // Performans optimizasyonu: Ülke listesi çok nadir değişir, cache varsa tekrar çekme
+            if (isOnline && !hasCache) {
                 try {
                     const freshData = await DiyanetManuelService.getCountries();
                     setCountries(freshData);
                     saveCountries(freshData);
                 } catch (error) {
-                    console.error('Error loading countries:', error);
+                    console.warn('Error loading countries:', error);
                 }
             }
         };
@@ -78,18 +82,22 @@ export const useLocationData = () => {
 
                 // Stale-while-revalidate: Önce cache'i göster
                 const cachedCities = await loadCities(countryId);
+                let hasCache = false;
+
                 if (cachedCities && cachedCities.length > 0) {
                     setCities(cachedCities);
+                    hasCache = true;
                 }
 
-                // Arka planda API'den güncelle (sadece online ise)
-                if (isOnline) {
+                // Arka planda API'den güncelle (sadece online ise ve cache yoksa)
+                // Performans optimizasyonu: Şehir listesi çok nadir değişir
+                if (isOnline && !hasCache) {
                     try {
                         const freshData = await DiyanetManuelService.getStates(countryId);
                         setCities(freshData);
                         saveCities(countryId, freshData);
                     } catch (error) {
-                        console.error('Error loading cities:', error);
+                        console.warn('Error loading cities:', error);
                     }
                 }
             } else {
@@ -107,8 +115,11 @@ export const useLocationData = () => {
 
                 // Stale-while-revalidate: Önce cache'i göster
                 const cachedDistricts = await loadDistricts(cityId);
+                let hasCache = false;
+
                 if (cachedDistricts && cachedDistricts.length > 0) {
                     setDistricts(cachedDistricts);
+                    hasCache = true;
 
                     // Tek ilçe varsa otomatik seç
                     if (cachedDistricts.length === 1 && !selectedLocation.district) {
@@ -119,8 +130,8 @@ export const useLocationData = () => {
                     }
                 }
 
-                // Arka planda API'den güncelle (sadece online ise)
-                if (isOnline) {
+                // Arka planda API'den güncelle (sadece online ise ve cache yoksa)
+                if (isOnline && !hasCache) {
                     try {
                         const freshData = await DiyanetManuelService.getDistricts(cityId);
                         setDistricts(freshData);
@@ -134,7 +145,7 @@ export const useLocationData = () => {
                             });
                         }
                     } catch (error) {
-                        console.error('Error loading districts:', error);
+                        console.warn('Error loading districts:', error);
                     }
                 }
             } else {
