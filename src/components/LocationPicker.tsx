@@ -55,7 +55,7 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
                 .replace(/[\u0300-\u036f]/g, '');
         };
 
-        const normalizedQuery = normalize(searchQuery);
+        const normalizedQuery = normalize(searchQuery.trim());
 
         return items.filter(item =>
             normalize(item.label).includes(normalizedQuery)
@@ -74,12 +74,12 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
                     flatListRef.current?.scrollToIndex({
                         index,
                         animated: true,
-                        viewPosition: 0.5
+                        viewPosition: 0.5,
                     });
                 }, 300);
             }
         }
-    }, [modalVisible, selectedValue]); // Removed filteredItems dependency to avoid scroll on search
+    }, [filteredItems, modalVisible, searchQuery, selectedValue]); // Removed filteredItems dependency to avoid scroll on search
 
     const handleSelect = (value: string) => {
         onValueChange(value);
@@ -159,7 +159,7 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
                                     style={[
                                         styles.pickerItem,
                                         item.value === selectedValue && styles.selectedPickerItem,
-                                        { height: ITEM_HEIGHT } // Enforce fixed height
+                                        { height: ITEM_HEIGHT }, // Enforce fixed height
                                     ]}
                                     onPress={() => handleSelect(item.value)}
                                 >
@@ -178,7 +178,7 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
                             keyboardShouldPersistTaps="handled"
                             ListEmptyComponent={
                                 <View style={styles.emptyContainer}>
-                                    <Text style={styles.emptyText}>Sonuç bulunamadı</Text>
+                                    <Text style={styles.emptyText}>Veriler Bekleniyor</Text>
                                 </View>
                             }
                         />

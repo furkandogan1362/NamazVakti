@@ -9,15 +9,17 @@ const timezoneCache: { [key: string]: string } = {};
 export const updateWidget = async (
     locationName: string,
     prayerTimes: PrayerTime,
-    locationDetail?: { country: string; city: string; district: string }
+    locationDetail?: { country: string; city: string; district: string },
+    timezone?: string
 ) => {
     if (Platform.OS !== 'android') {return;}
 
     try {
-        // Default to device timezone
-        let timezoneId = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        // Use provided timezone or default to device timezone
+        let timezoneId = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-        if (locationDetail?.city) {
+        // Only fetch if timezone is not provided
+        if (!timezone && locationDetail?.city) {
             const cacheKey = `${locationDetail.city}-${locationDetail.country}`;
 
             if (timezoneCache[cacheKey] !== undefined) {
@@ -69,14 +71,16 @@ export const updateWidget = async (
 export const syncWidgetMonthlyCache = async (
     locationName: string,
     monthlyPrayerTimes: PrayerTime[],
-    locationDetail?: { country: string; city: string; district: string }
+    locationDetail?: { country: string; city: string; district: string },
+    timezone?: string
 ) => {
     if (Platform.OS !== 'android') {return;}
     try {
-        // Determine timezone same way we do for single update
-        let timezoneId = Intl.DateTimeFormat().resolvedOptions().timeZone;
+        // Use provided timezone or default to device timezone
+        let timezoneId = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-        if (locationDetail?.city) {
+        // Only fetch if timezone is not provided
+        if (!timezone && locationDetail?.city) {
             const cacheKey = `${locationDetail.city}-${locationDetail.country}`;
             if (timezoneCache[cacheKey] !== undefined) {
                 timezoneId = timezoneCache[cacheKey];

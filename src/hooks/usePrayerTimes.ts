@@ -109,6 +109,14 @@ export const usePrayerTimes = (timezone?: string) => {
         allPrayerTimesRef.current = allPrayerTimes;
     }, [allPrayerTimes]);
 
+    // Konum değiştiğinde eski verileri temizle (yanlış veri göstermemek için)
+    useEffect(() => {
+        if (selectedLocation.district && lastLocationId !== null && selectedLocation.district.id !== lastLocationId) {
+            setAllPrayerTimes([]);
+            setCurrentDayPrayerTime(null);
+        }
+    }, [selectedLocation.district, lastLocationId]);
+
     const updateCurrentDayPrayerTime = useCallback(() => {
         const today = getLocalTodayDate(timezone);
 
@@ -190,9 +198,14 @@ export const usePrayerTimes = (timezone?: string) => {
             } catch (error) {
                 // Kritik olmayan hata: Arka planda veri güncellenemedi, cache kullanılacak
                 console.warn('Warning fetching prayer times:', error);
-                const cachedTimes = await loadPrayerTimes();
-                if (cachedTimes && cachedTimes.length > 0) {
-                    setAllPrayerTimes(cachedTimes);
+
+                // Sadece konum değişmediyse cache'den yükle
+                // Konum değiştiyse cache'deki veri eski konuma aittir, yükleme!
+                if (!locationChanged) {
+                    const cachedTimes = await loadPrayerTimes();
+                    if (cachedTimes && cachedTimes.length > 0) {
+                        setAllPrayerTimes(cachedTimes);
+                    }
                 }
             }
         } else {

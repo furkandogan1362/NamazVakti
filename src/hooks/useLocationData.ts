@@ -53,7 +53,7 @@ export const useLocationData = () => {
             // Stale-while-revalidate: Önce cache'i göster
             const cachedCountries = await loadCountries();
             let hasCache = false;
-            
+
             if (cachedCountries && cachedCountries.length > 0) {
                 setCountries(cachedCountries);
                 hasCache = true;

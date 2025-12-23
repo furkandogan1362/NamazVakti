@@ -446,9 +446,9 @@ const AppContent: React.FC = () => {
                 };
             }
 
-            updateWidget(locationName, activePrayerTime, locationDetail);
+            updateWidget(locationName, activePrayerTime, locationDetail, timezone);
         }
-    }, [activePrayerTime, selectedLocation, gpsLocationInfo, locationMode]);
+    }, [activePrayerTime, selectedLocation, gpsLocationInfo, locationMode, timezone]);
 
     // Widget aylık cache senkronizasyonu (gün geçişlerinde otomatik güncelleme için)
     useEffect(() => {
@@ -476,9 +476,9 @@ const AppContent: React.FC = () => {
             }
 
             // Aylık cache'i native tarafına gönder (API çağrısı yapılmaz, mevcut veriler kullanılır)
-            syncWidgetMonthlyCache(locationName, memoizedPrayerTimes, locationDetail);
+            syncWidgetMonthlyCache(locationName, memoizedPrayerTimes, locationDetail, timezone);
         }
-    }, [memoizedPrayerTimes, selectedLocation, gpsLocationInfo, locationMode]);
+    }, [memoizedPrayerTimes, selectedLocation, gpsLocationInfo, locationMode, timezone]);
 
     const handleConfirmLocationChange = async () => {
         if (!newLocation) {

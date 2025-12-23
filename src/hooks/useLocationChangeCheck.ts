@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Platform, PermissionsAndroid } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import { DiyanetService, CityDetail } from '../api/apiDiyanet';
-import { useLocation } from '../contexts/LocationContext';
 import { loadGPSCityInfo, loadLocationMode, loadLocationData } from '../services/storageService';
 import { useNetwork } from '../contexts/NetworkContext';
 
@@ -75,7 +74,7 @@ export const useLocationChangeCheck = () => {
                         // Karşılaştırma
                         // Normalize strings for comparison to avoid case/locale issues
                         const normalize = (str: string) => str ? str.toLowerCase().trim() : '';
-                        
+
                         const isDifferent =
                             (currentCityName && normalize(cityDetail.city) !== normalize(currentCityName)) ||
                             (currentDistrictName && normalize(cityDetail.name) !== normalize(currentDistrictName));
