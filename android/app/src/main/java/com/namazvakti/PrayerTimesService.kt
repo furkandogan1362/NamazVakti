@@ -16,6 +16,12 @@ class PrayerTimesService : Service() {
     private var updateRunnable: Runnable? = null
     private var lastPrayerName: String = ""
 
+    // Cache variables for performance optimization
+    private var cachedPrayerTimesJson: String? = null
+    private var cachedMonthlyJson: String? = null
+    private var cachedEffectiveTimes: JSONObject? = null
+    private var lastDayOfYear: Int = -1
+
     companion object {
         private const val NOTIFICATION_ID = 1001
         private const val TAG = "PrayerTimesService"
@@ -107,56 +113,77 @@ class PrayerTimesService : Service() {
         val monthlyJsonRaw = prefs.getString("monthlyPrayerTimes", null)
         val locationName = prefs.getString("locationName", "Konum Seçilmedi") ?: "Konum Seçilmedi"
 
-        // Determine which data to use: prefer monthly cache for correct day rollover
+        // Performance Optimization: Check if data or day has changed
+        val currentCal = Calendar.getInstance()
+        val currentDayOfYear = currentCal.get(Calendar.DAY_OF_YEAR)
+        
         var effectiveTimes: JSONObject? = null
         var timezoneIdFromMonthly: String? = null
 
-        if (monthlyJsonRaw != null) {
-            try {
-                val monthlyObj = JSONObject(monthlyJsonRaw)
-                timezoneIdFromMonthly = monthlyObj.optString("timezoneId", null)
+        // If cache is valid and day hasn't changed, use cached data
+        if (cachedEffectiveTimes != null && 
+            currentDayOfYear == lastDayOfYear && 
+            prayerTimesJsonSingle == cachedPrayerTimesJson && 
+            monthlyJsonRaw == cachedMonthlyJson) {
+            effectiveTimes = cachedEffectiveTimes
+            // We still need timezoneId for calculations below, extract from cached object if possible or re-parse monthly
+            // To be safe and simple, we'll re-extract timezoneId from monthly if needed, but parsing full JSON is skipped if effectiveTimes is ready.
+            // Actually, let's just proceed with effectiveTimes.
+        } else {
+            // Data changed or day changed, re-parse
+            if (monthlyJsonRaw != null) {
+                try {
+                    val monthlyObj = JSONObject(monthlyJsonRaw)
+                    timezoneIdFromMonthly = monthlyObj.optString("timezoneId", null)
 
-                // Pick today's item by date in that timezone
-                val tzId = timezoneIdFromMonthly ?: TimeZone.getDefault().id
-                val tz = TimeZone.getTimeZone(tzId)
-                val cal = Calendar.getInstance(tz)
-                val y = cal.get(Calendar.YEAR)
-                val m = cal.get(Calendar.MONTH) + 1
-                val d = cal.get(Calendar.DAY_OF_MONTH)
-                val todayStr = String.format(Locale.US, "%04d-%02d-%02d", y, m, d)
+                    // Pick today's item by date in that timezone
+                    val tzId = timezoneIdFromMonthly ?: TimeZone.getDefault().id
+                    val tz = TimeZone.getTimeZone(tzId)
+                    val cal = Calendar.getInstance(tz)
+                    val y = cal.get(Calendar.YEAR)
+                    val m = cal.get(Calendar.MONTH) + 1
+                    val d = cal.get(Calendar.DAY_OF_MONTH)
+                    val todayStr = String.format(Locale.US, "%04d-%02d-%02d", y, m, d)
 
-                val days = monthlyObj.optJSONArray("days")
-                if (days != null) {
-                    for (i in 0 until days.length()) {
-                        val dayObj = days.optJSONObject(i)
-                        if (dayObj != null && todayStr == dayObj.optString("date")) {
-                            // Normalize to expected notification schema
-                            effectiveTimes = JSONObject().apply {
-                                put("fajr", dayObj.optString("fajr"))
-                                put("sun", dayObj.optString("sun"))
-                                put("dhuhr", dayObj.optString("dhuhr"))
-                                put("asr", dayObj.optString("asr"))
-                                put("maghrib", dayObj.optString("maghrib"))
-                                put("isha", dayObj.optString("isha"))
-                                put("timezoneId", tzId)
-                                put("country", monthlyObj.optString("country", ""))
-                                put("city", monthlyObj.optString("city", ""))
-                                put("district", monthlyObj.optString("district", ""))
+                    val days = monthlyObj.optJSONArray("days")
+                    if (days != null) {
+                        for (i in 0 until days.length()) {
+                            val dayObj = days.optJSONObject(i)
+                            if (dayObj != null && todayStr == dayObj.optString("date")) {
+                                // Normalize to expected notification schema
+                                effectiveTimes = JSONObject().apply {
+                                    put("fajr", dayObj.optString("fajr"))
+                                    put("sun", dayObj.optString("sun"))
+                                    put("dhuhr", dayObj.optString("dhuhr"))
+                                    put("asr", dayObj.optString("asr"))
+                                    put("maghrib", dayObj.optString("maghrib"))
+                                    put("isha", dayObj.optString("isha"))
+                                    put("timezoneId", tzId)
+                                    put("country", monthlyObj.optString("country", ""))
+                                    put("city", monthlyObj.optString("city", ""))
+                                    put("district", monthlyObj.optString("district", ""))
+                                }
+                                break
                             }
-                            break
                         }
                     }
+                } catch (e: Exception) {
+                    android.util.Log.e(TAG, "Failed to parse monthly notification cache", e)
                 }
-            } catch (e: Exception) {
-                android.util.Log.e(TAG, "Failed to parse monthly notification cache", e)
             }
-        }
 
-        // Fallback to single-day payload if monthly not available or today's not found
-        if (effectiveTimes == null && prayerTimesJsonSingle != null) {
-            try {
-                effectiveTimes = JSONObject(prayerTimesJsonSingle)
-            } catch (_: Exception) {}
+            // Fallback to single-day payload if monthly not available or today's not found
+            if (effectiveTimes == null && prayerTimesJsonSingle != null) {
+                try {
+                    effectiveTimes = JSONObject(prayerTimesJsonSingle)
+                } catch (_: Exception) {}
+            }
+            
+            // Update Cache
+            cachedPrayerTimesJson = prayerTimesJsonSingle
+            cachedMonthlyJson = monthlyJsonRaw
+            cachedEffectiveTimes = effectiveTimes
+            lastDayOfYear = currentDayOfYear
         }
 
         if (effectiveTimes != null) {

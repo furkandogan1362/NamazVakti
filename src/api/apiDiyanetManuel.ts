@@ -77,7 +77,7 @@ const AUTH_CREDENTIALS = {
 // User-Agent: Dart/3.5 (dart:io) -> Sunucuya kendini resmi Flutter uygulaması gibi tanıtır.
 const apiClient = axios.create({
   baseURL: BASE_URL,
-  timeout: 15000, // 15 seconds timeout
+  timeout: 30000, // 30 seconds timeout
   headers: {
     'User-Agent': 'Dart/3.5 (dart:io)',
     'Content-Type': 'application/json',
@@ -140,21 +140,40 @@ apiClient.interceptors.request.use(async (config) => {
   return config;
 });
 
-// 2. Cevap Gelirken: 401 (Yetkisiz) hatası varsa token yenileyip tekrar dene
+// 2. Cevap Gelirken: Hata yönetimi ve Retry mekanizması
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
-    // Eğer hata 401 ise ve daha önce tekrar denememişsek
+
+    // Retry sayacı başlat
+    if (!originalRequest._retryCount) {
+      originalRequest._retryCount = 0;
+    }
+
+    // 401 (Yetkisiz) hatası: Token yenile ve tekrar dene
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const newToken = await loginAndGetToken();
       if (newToken) {
         accessToken = newToken;
         originalRequest.headers.Authorization = `Bearer ${newToken}`;
-        return apiClient(originalRequest); // İsteği tekrarla
+        return apiClient(originalRequest);
       }
     }
+
+    // Network Error veya Timeout durumunda tekrar dene (Max 3 kere)
+    if ((error.code === 'ECONNABORTED' || error.message === 'Network Error' || !error.response) && originalRequest._retryCount < 3) {
+      originalRequest._retryCount += 1;
+      console.log(`⚠️ [ManuelAPI] Ağ hatası, tekrar deneniyor (${originalRequest._retryCount}/3)...`);
+
+      // Exponential backoff (1s, 2s, 4s bekle)
+      const delay = Math.pow(2, originalRequest._retryCount - 1) * 1000;
+      await new Promise(resolve => setTimeout(resolve, delay));
+
+      return apiClient(originalRequest);
+    }
+
     return Promise.reject(error);
   }
 );

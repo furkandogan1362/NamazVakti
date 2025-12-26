@@ -90,6 +90,10 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
     const handleOpen = () => {
         if (enabled) {
             setModalVisible(true);
+        } else {
+            // Opsiyonel: Kullanıcıya neden açılmadığını belirten bir uyarı (Toast vs.)
+            // Şimdilik sadece logluyoruz veya sessiz kalıyoruz.
+            // Kullanıcı deneyimi için bir önceki seçimin yapılması gerektiğini belirten bir animasyon eklenebilir.
         }
     };
 
@@ -194,12 +198,62 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
         countries,
         cities,
         districts,
-        selectedLocation,
-        setSelectedLocation,
+        selectedLocation: globalSelectedLocation,
+        setSelectedLocation: setGlobalSelectedLocation,
         setCountries,
+        setCities,
+        setDistricts,
+        addSavedLocation,
     } = useLocation();
     const { theme, isSmallScreen, screenWidth } = useTheme();
+
+    // Local state for selection process
+    const [tempSelectedLocation, setTempSelectedLocation] = useState(globalSelectedLocation);
+
+    // Fetch cities when country changes in TEMP state
+    useEffect(() => {
+        const loadCitiesData = async () => {
+            if (tempSelectedLocation.country) {
+                const countryId = tempSelectedLocation.country.id;
+                try {
+                    setError('');
+                    const freshData = await DiyanetManuelService.getStates(countryId);
+                    setCities(freshData);
+                } catch (error) {
+                    console.warn('Error loading cities for temp location:', error);
+                    setError('Şehirler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+                    setCities([]);
+                }
+            } else {
+                setCities([]);
+            }
+        };
+        loadCitiesData();
+    }, [tempSelectedLocation.country, setCities]);
+
+    // Fetch districts when city changes in TEMP state
+    useEffect(() => {
+        const loadDistrictsData = async () => {
+            if (tempSelectedLocation.city) {
+                const cityId = tempSelectedLocation.city.id;
+                try {
+                    setError('');
+                    const freshData = await DiyanetManuelService.getDistricts(cityId);
+                    setDistricts(freshData);
+                } catch (error) {
+                    console.warn('Error loading districts for temp location:', error);
+                    setError('İlçeler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
+                    setDistricts([]);
+                }
+            } else {
+                setDistricts([]);
+            }
+        };
+        loadDistrictsData();
+    }, [tempSelectedLocation.city, setDistricts]);
+
     const [loading, setLoading] = useState(countries.length === 0);
+
     const [error, setError] = useState('');
     const [showSameLocationModal, setShowSameLocationModal] = useState(false);
     const [sameLocationName, setSameLocationName] = useState('');
@@ -253,45 +307,45 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
 
     const handleCountryChange = (countryId: string) => {
         if (!countryId) {
-            setSelectedLocation({ country: null, city: null, district: null });
+            setTempSelectedLocation({ country: null, city: null, district: null });
             return;
         }
         const country = countries.find(c => c.id.toString() === countryId);
         if (country) {
-            setSelectedLocation({ country, city: null, district: null });
+            setTempSelectedLocation({ country, city: null, district: null });
         }
     };
 
     const handleCityChange = (cityId: string) => {
         if (!cityId) {
-            setSelectedLocation({ ...selectedLocation, city: null, district: null });
+            setTempSelectedLocation({ ...tempSelectedLocation, city: null, district: null });
             return;
         }
         const city = cities.find(c => c.id.toString() === cityId);
         if (city) {
-            setSelectedLocation({ ...selectedLocation, city, district: null });
+            setTempSelectedLocation({ ...tempSelectedLocation, city, district: null });
         }
     };
 
     const handleDistrictChange = (districtId: string) => {
         if (!districtId) {
-            setSelectedLocation({ ...selectedLocation, district: null });
+            setTempSelectedLocation({ ...tempSelectedLocation, district: null });
             return;
         }
         const district = districts.find(d => d.id.toString() === districtId);
         if (district) {
-            setSelectedLocation({ ...selectedLocation, district });
+            setTempSelectedLocation({ ...tempSelectedLocation, district });
         }
     };
 
     const handleConfirmLocation = async () => {
-        if (selectedLocation.country && selectedLocation.city && selectedLocation.district) {
-            const selectedDistrictId = selectedLocation.district.id;
+        if (tempSelectedLocation.country && tempSelectedLocation.city && tempSelectedLocation.district) {
+            const selectedDistrictId = tempSelectedLocation.district.id;
 
             // Başlangıçta kaydedilen cache ID'lerini kullan (güncellenmiş değil!)
             if (!initialCachedIds) {
                 // Henüz yüklenmemişse, yeni konum olarak kabul et
-                console.log('🔄 Yeni manuel konum seçildi (cache henüz yüklenmedi):', selectedLocation.district.name);
+                console.log('🔄 Yeni manuel konum seçildi (cache henüz yüklenmedi):', tempSelectedLocation.district.name);
                 onClose();
                 return;
             }
@@ -312,14 +366,17 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
 
             // Herhangi bir cache'de aynı ID varsa modal göster
             if (isSameLocation) {
-                console.log('📍 Aynı konum seçildi, API isteği yapılmıyor:', selectedLocation.district.name);
-                setSameLocationName(selectedLocation.district.name);
+                console.log('📍 Aynı konum seçildi, API isteği yapılmıyor:', tempSelectedLocation.district.name);
+                setSameLocationName(tempSelectedLocation.district.name);
                 setShowSameLocationModal(true);
                 return;
             }
 
             // Farklı konum seçildi, modal kapat ve usePrayerTimes hook'u API'yi çağıracak
-            console.log('🔄 Yeni manuel konum seçildi:', selectedLocation.district.name);
+            console.log('🔄 Yeni manuel konum seçildi:', tempSelectedLocation.district.name);
+            addSavedLocation(tempSelectedLocation);
+            // Update global state only on confirm
+            setGlobalSelectedLocation(tempSelectedLocation);
             onClose();
         }
     };
@@ -389,7 +446,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
             <CustomPicker
                 label="Ülke"
                 items={countryItems}
-                selectedValue={selectedLocation.country?.id.toString() || ''}
+                selectedValue={tempSelectedLocation.country?.id.toString() || ''}
                 onValueChange={handleCountryChange}
                 placeholder="Ülke Seçiniz"
                 theme={theme}
@@ -399,10 +456,10 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
             <CustomPicker
                 label="Şehir"
                 items={cityItems}
-                selectedValue={selectedLocation.city?.id.toString() || ''}
+                selectedValue={tempSelectedLocation.city?.id.toString() || ''}
                 onValueChange={handleCityChange}
                 placeholder="Şehir Seçiniz"
-                enabled={!!selectedLocation.country}
+                enabled={!!tempSelectedLocation.country}
                 theme={theme}
                 styles={styles}
             />
@@ -410,15 +467,15 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
             <CustomPicker
                 label="İlçe"
                 items={districtItems}
-                selectedValue={selectedLocation.district?.id.toString() || ''}
+                selectedValue={tempSelectedLocation.district?.id.toString() || ''}
                 onValueChange={handleDistrictChange}
                 placeholder="İlçe Seçiniz"
-                enabled={!!selectedLocation.city}
+                enabled={!!tempSelectedLocation.city}
                 theme={theme}
                 styles={styles}
             />
 
-            {selectedLocation.country && selectedLocation.city && selectedLocation.district && (
+            {tempSelectedLocation.country && tempSelectedLocation.city && tempSelectedLocation.district && (
                 <TouchableOpacity
                     style={styles.confirmButton}
                     onPress={handleConfirmLocation}
@@ -620,9 +677,12 @@ const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number)
             textAlign: 'center',
         },
         errorText: {
-            fontSize: 14,
-            color: 'red',
-            marginBottom: 10,
+            fontSize: 15,
+            color: theme.colors.error,
+            marginBottom: 16,
+            textAlign: 'center',
+            lineHeight: 22,
+            paddingHorizontal: 10,
         },
         retryButton: {
             marginTop: 10,

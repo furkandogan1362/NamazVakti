@@ -15,6 +15,7 @@ import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Modal, StatusBar, Animated } from 'react-native';
 import LocationModal from './components/LocationModal';
+import SavedLocationsModal from './components/SavedLocationsModal';
 import LocationChangeModal from './components/LocationChangeModal';
 import LocationMethodModal from './components/LocationMethodModal';
 import WidgetPermissionsModal from './components/WidgetPermissionsModal';
@@ -51,6 +52,7 @@ import {
     clearManualData,
     clearGPSData,
 } from './services/storageService';
+import { SelectedLocation } from './types/types';
 
 type ScreenType = 'home' | 'weekly' | 'monthly';
 
@@ -63,7 +65,7 @@ interface DisplayLocation {
 
 const AppContent: React.FC = () => {
     const { isOnline } = useNetwork();
-    const { selectedLocation, setSelectedLocation } = useLocation();
+    const { selectedLocation, setSelectedLocation, savedLocations, addSavedLocation } = useLocation();
     const { theme, toggleTheme, isSmallScreen, screenWidth, fadeAnim } = useTheme();
 
     // Seçili konumun saat dilimini al
@@ -80,6 +82,7 @@ const AppContent: React.FC = () => {
 
     const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
     const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
+    const [isSavedLocationsModalOpen, setIsSavedLocationsModalOpen] = useState(false);
     const [initialCheckDone, setInitialCheckDone] = useState(false);
     const [hasCachedData, setHasCachedData] = useState(false);
     const [showOfflineModal, setShowOfflineModal] = useState(false);
@@ -207,12 +210,20 @@ const AppContent: React.FC = () => {
     useEffect(() => {
         const hasFullLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
 
-        if (hasFullLocation && selectedLocation.country && selectedLocation.city && selectedLocation.district) {
+        if (hasFullLocation) {
+            // Eğer manuel bir konum seçildiyse ve GPS modundaysak, manuel moda geç
+            if (isGPSMode) {
+                setIsGPSMode(false);
+                setLocationMode('manual');
+                saveLocationMode('manual');
+                setGpsLocationInfo(null); // GPS bilgisini temizle ki vurgu kaysın
+            }
+
             // Tam konum seçildiğinde önceki konumu güncelle (display format)
             setPreviousLocation({
-                country: selectedLocation.country.name,
-                city: selectedLocation.city.name,
-                region: selectedLocation.district.name,
+                country: selectedLocation.country!.name,
+                city: selectedLocation.city!.name,
+                region: selectedLocation.district!.name,
             });
             setHasCachedData(true);
         }
@@ -287,6 +298,14 @@ const AppContent: React.FC = () => {
             setSelectedLocation({ country: null, city: null, district: null });
             setHasCachedData(true);
 
+            // Konumu kaydet (Varsa eklemez, yoksa ekler)
+            const newLocation: SelectedLocation = {
+                country: { name: result.cityDetail.country, code: '', id: 0 },
+                city: { name: result.cityDetail.city, code: '', id: 0 },
+                district: { name: result.cityDetail.name, code: '', id: parseInt(result.cityDetail.id) }
+            };
+            addSavedLocation(newLocation);
+
             // 2. Storage işlemlerini arka planda yap (UI'ı bloklamasın)
             Promise.all([
                 saveLocationMode('gps'),
@@ -305,7 +324,7 @@ const AppContent: React.FC = () => {
             // GPS başarısız, method seçici göster
             setShowLocationMethodModal(true);
         }
-    }, [setGPSPrayerTimesHook, setSelectedLocation, setIsGPSMode]);
+    }, [setGPSPrayerTimesHook, setSelectedLocation, setIsGPSMode, addSavedLocation]);
 
     // GPS servisi atlandığında
     const handleGPSSkip = useCallback(async () => {
@@ -562,7 +581,6 @@ const AppContent: React.FC = () => {
                 >
                 {/* Header with theme toggle */}
                 <View style={styles.header}>
-                    <Text style={styles.headerTitle}>Namaz Vakti</Text>
                     <View style={styles.headerButtons}>
                         <TouchableOpacity
                             style={styles.iconButton}
@@ -578,6 +596,14 @@ const AppContent: React.FC = () => {
                         >
                             <View style={styles.iconButtonInner}>
                                 <Text style={styles.iconButtonText}>🕋</Text>
+                            </View>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                            style={styles.iconButton}
+                            onPress={() => setIsSavedLocationsModalOpen(true)}
+                        >
+                            <View style={styles.iconButtonInner}>
+                                <MaterialIcons name="bookmarks" size={24} color={theme.colors.accent} />
                             </View>
                         </TouchableOpacity>
                         <TouchableOpacity
@@ -699,6 +725,28 @@ const AppContent: React.FC = () => {
                     onClose={handleCloseLocationPicker}
                 />
 
+                {/* Saved Locations Modal */}
+                <SavedLocationsModal
+                    visible={isSavedLocationsModalOpen}
+                    onClose={() => setIsSavedLocationsModalOpen(false)}
+                    currentLocation={isGPSMode && gpsLocationInfo ? {
+                        country: gpsLocationInfo.country,
+                        city: gpsLocationInfo.city,
+                        district: gpsLocationInfo.name
+                    } : undefined}
+                    onAddLocation={() => {
+                        setIsSavedLocationsModalOpen(false);
+                        // Eğer zaten açıksa kapatıp açmaya gerek yok, ama toggle olduğu için dikkatli olmalı
+                        // handleToggleLocationPicker toggle yapıyor.
+                        // Direkt true yapabiliriz ama setter dışarıda değil.
+                        // handleToggleLocationPicker'ı kullanacağız.
+                        // Eğer zaten açıksa (ki bu modal üstteyse alttaki kapalıdır mantıken)
+                        if (!isLocationPickerOpen) {
+                            handleToggleLocationPicker();
+                        }
+                    }}
+                />
+
                 {/* Location Method Selection Modal */}
                 <LocationMethodModal
                     visible={showLocationMethodModal && isOnline}
@@ -801,15 +849,19 @@ const AppContent: React.FC = () => {
     );
 };
 
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+
 const App: React.FC = () => {
     return (
-        <ThemeProvider>
-            <NetworkProvider>
-                <LocationProvider>
-                    <AppContent />
-                </LocationProvider>
-            </NetworkProvider>
-        </ThemeProvider>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+            <ThemeProvider>
+                <NetworkProvider>
+                    <LocationProvider>
+                        <AppContent />
+                    </LocationProvider>
+                </NetworkProvider>
+            </ThemeProvider>
+        </GestureHandlerRootView>
     );
 };
 

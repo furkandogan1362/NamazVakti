@@ -159,9 +159,12 @@ object NotificationHelper {
             }
         }
 
+        // Algoritma: Her saniye rengi çok az değiştirerek sistemin bildirimi sürekli taze/yeni algılamasını ve en üstte tutmasını sağla
+        val dynamicColor = if (remainingSeconds % 2 == 0) android.graphics.Color.WHITE else android.graphics.Color.rgb(255, 255, 254)
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(smallIconResId)
-            .setColor(android.graphics.Color.WHITE)
+            .setColor(dynamicColor)
             .setContentTitle(titleText)
             .setContentText(contentText)
             .setStyle(NotificationCompat.BigTextStyle()
@@ -175,9 +178,9 @@ object NotificationHelper {
             .setCategory(NotificationCompat.CATEGORY_ALARM)  // ALARM kategorisi - en üstte kalması için
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             // Gelecek zaman damgası - en üstte tutma hilesi (arka planda sıralama için)
-            .setWhen(System.currentTimeMillis() + 3600000)  // 1 saat sonrası
+            .setWhen(System.currentTimeMillis() + (24 * 60 * 60 * 1000L))  // 24 saat sonrası - her zaman en yeni görünsün
             .setShowWhen(false)  // Zamanı gösterme - sadece sıralama için kullan
-            .setSortKey("0")  // En üstte sıralansın
+            .setSortKey(" ")  // En üstte sıralansın (Space karakteri 0'dan önce gelir)
             .setAutoCancel(false)
             .setOnlyAlertOnce(true)
             .setSound(null)  // Ses yok

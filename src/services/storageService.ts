@@ -33,6 +33,25 @@ export const loadLocationData = async (): Promise<SelectedLocation | null> => {
     }
 };
 
+// Kayıtlı konumlar listesi kaydet/yükle
+export const saveSavedLocations = async (locations: SelectedLocation[]): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('savedLocations', JSON.stringify(locations));
+    } catch (error) {
+        console.error('Error saving saved locations:', error);
+    }
+};
+
+export const loadSavedLocations = async (): Promise<SelectedLocation[]> => {
+    try {
+        const savedLocations = await AsyncStorage.getItem('savedLocations');
+        return savedLocations ? JSON.parse(savedLocations) : [];
+    } catch (error) {
+        console.error('Error loading saved locations:', error);
+        return [];
+    }
+};
+
 export const savePrayerTimes = async (times: PrayerTime[]): Promise<void> => {
     try {
         await AsyncStorage.setItem('prayerTimes', JSON.stringify(times));
