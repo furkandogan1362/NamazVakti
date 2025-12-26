@@ -4,6 +4,78 @@ import { useNetwork } from '../contexts/NetworkContext';
 
 const TIMEZONE_CACHE_KEY = 'location_timezone_cache_v3';
 
+// Dünya genelinde ülke ismi varyasyonları -> country_code eşleştirmesi
+const COUNTRY_CODE_MAP: { [key: string]: string[] } = {
+    'us': ['abd', 'amerika', 'united states', 'usa', 'birlesik devletler', 'amerikan'],
+    'gb': ['ingiltere', 'birlesik krallik', 'united kingdom', 'uk', 'britain', 'great britain', 'england'],
+    'tr': ['turkiye', 'turkey', 'türkiye'],
+    'ru': ['rusya', 'russia', 'rusya federasyonu', 'russian federation'],
+    'cn': ['cin', 'china', 'çin', 'cinhalk cumhuriyeti'],
+    'au': ['avustralya', 'australia', 'avusturalya'],
+    'ca': ['kanada', 'canada'],
+    'br': ['brezilya', 'brazil', 'brasil'],
+    'mx': ['meksika', 'mexico', 'mejico'],
+    'id': ['endonezya', 'indonesia', 'indonezya'],
+    'in': ['hindistan', 'india', 'bharata'],
+    'de': ['almanya', 'germany', 'deutschland'],
+    'fr': ['fransa', 'france'],
+    'es': ['ispanya', 'spain', 'espana', 'españa'],
+    'it': ['italya', 'italy', 'italia'],
+    'jp': ['japonya', 'japan', 'nippon'],
+    'kr': ['guney kore', 'south korea', 'korea', 'kore'],
+    'sa': ['suudi arabistan', 'saudi arabia', 'arabistan'],
+    'ae': ['birlesik arap emirlikleri', 'uae', 'united arab emirates', 'bae', 'dubai'],
+    'eg': ['misir', 'egypt', 'mısır'],
+    'za': ['guney afrika', 'south africa'],
+    'ar': ['arjantin', 'argentina'],
+    'cl': ['sili', 'chile', 'şili'],
+    'pe': ['peru'],
+    'co': ['kolombiya', 'colombia'],
+    've': ['venezuela'],
+    'pk': ['pakistan'],
+    'bd': ['banglades', 'bangladesh'],
+    'my': ['malezya', 'malaysia'],
+    'th': ['tayland', 'thailand', 'siam'],
+    'vn': ['vietnam'],
+    'ph': ['filipinler', 'philippines'],
+    'ng': ['nijerya', 'nigeria'],
+    'ke': ['kenya'],
+    'ma': ['fas', 'morocco', 'maroc'],
+    'dz': ['cezayir', 'algeria', 'algerie'],
+    'tn': ['tunus', 'tunisia'],
+    'ly': ['libya'],
+    'ir': ['iran'],
+    'iq': ['irak', 'iraq'],
+    'sy': ['suriye', 'syria'],
+    'lb': ['lubnan', 'lebanon', 'lübnan'],
+    'jo': ['urdun', 'jordan', 'ürdün'],
+    'il': ['israil', 'israel'],
+    'ps': ['filistin', 'palestine'],
+    'kz': ['kazakistan', 'kazakhstan'],
+    'uz': ['ozbekistan', 'uzbekistan', 'özbekistan'],
+    'az': ['azerbaycan', 'azerbaijan'],
+    'ge': ['gurcistan', 'georgia', 'gürcistan'],
+    'ua': ['ukrayna', 'ukraine'],
+    'pl': ['polonya', 'poland', 'polska'],
+    'cz': ['cekya', 'czech', 'czechia', 'çekya'],
+    'at': ['avusturya', 'austria', 'osterreich'],
+    'ch': ['isvicre', 'switzerland', 'isviçre', 'schweiz'],
+    'nl': ['hollanda', 'netherlands', 'nederland'],
+    'be': ['belcika', 'belgium', 'belçika'],
+    'se': ['isvec', 'sweden', 'isveç'],
+    'no': ['norvec', 'norway', 'norveç'],
+    'dk': ['danimarka', 'denmark'],
+    'fi': ['finlandiya', 'finland'],
+    'gr': ['yunanistan', 'greece', 'hellas'],
+    'pt': ['portekiz', 'portugal'],
+    'ie': ['irlanda', 'ireland'],
+    'nz': ['yeni zelanda', 'new zealand'],
+    'sg': ['singapur', 'singapore'],
+    'hk': ['hong kong'],
+    'tw': ['tayvan', 'taiwan'],
+    'mo': ['makao', 'macao', 'macau'],
+};
+
 interface LocationTimeHook {
     timezone: string;
     loading: boolean;
@@ -130,12 +202,18 @@ const searchLocation = async (query: string, countryFilter?: string): Promise<st
                     const countryName = r.country ? normalizeString(r.country) : '';
                     const countryCode = r.country_code ? normalizeString(r.country_code) : '';
 
-                    // Special handling for Turkey
-                    if ((normalizedFilter === 'turkiye' || normalizedFilter === 'turkey') &&
-                        (countryName === 'turkiye' || countryName === 'turkey' || countryCode === 'tr')) {
-                        return true;
+                    // 1. Country code map'ten kontrol et (dünya geneli destekli)
+                    for (const [code, aliases] of Object.entries(COUNTRY_CODE_MAP)) {
+                        const userCountryMatches = aliases.some(alias => {
+                            const normalizedAlias = normalizeString(alias);
+                            return normalizedFilter.includes(normalizedAlias) || normalizedAlias.includes(normalizedFilter);
+                        });
+                        if (userCountryMatches && countryCode === code) {
+                            return true;
+                        }
                     }
 
+                    // 2. Direkt isim veya kod eşleşmesi
                     const nameMatch = countryName !== '' && (countryName.includes(normalizedFilter) || normalizedFilter.includes(countryName));
                     const codeMatch = countryCode !== '' && countryCode === normalizedFilter;
 

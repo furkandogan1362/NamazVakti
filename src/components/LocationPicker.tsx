@@ -3,7 +3,16 @@ import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Modal, Fla
 import { useLocation } from '../contexts/LocationContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { DiyanetManuelService } from '../api/apiDiyanetManuel';
-import { loadLastLocationId, loadGPSCityInfo } from '../services/storageService';
+import {
+    loadLastLocationId,
+    loadGPSCityInfo,
+    loadCachedCountries,
+    saveCachedCountries,
+    loadCachedCities,
+    saveCachedCities,
+    loadCachedDistricts,
+    saveCachedDistricts,
+} from '../services/storageService';
 import { PlaceItem } from '../types/types';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import GlassView from './ui/GlassView';
@@ -68,18 +77,23 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
     useEffect(() => {
         if (modalVisible && selectedValue && filteredItems.length > 0 && !searchQuery) {
             const index = filteredItems.findIndex(item => item.value === selectedValue);
-            if (index !== -1) {
+            // Index'in geçerli sınırlar içinde olduğunu kontrol et
+            if (index !== -1 && index < filteredItems.length) {
                 // Wait for modal animation and layout
                 setTimeout(() => {
-                    flatListRef.current?.scrollToIndex({
-                        index,
-                        animated: true,
-                        viewPosition: 0.5,
-                    });
+                    // Tekrar kontrol et (async olduğu için liste değişmiş olabilir)
+                    if (flatListRef.current && index < filteredItems.length) {
+                        flatListRef.current.scrollToIndex({
+                            index,
+                            animated: true,
+                            viewPosition: 0.5,
+                        });
+                    }
                 }, 300);
             }
         }
-    }, [filteredItems, modalVisible, searchQuery, selectedValue]); // Removed filteredItems dependency to avoid scroll on search
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [modalVisible, searchQuery, selectedValue]); // filteredItems kasıtlı olarak hariç tutuldu - arama sırasında scroll tetiklenmemeli
 
     const handleSelect = (value: string) => {
         onValueChange(value);
@@ -153,9 +167,13 @@ const CustomPicker: React.FC<CustomPickerProps> = ({
                                 { length: ITEM_HEIGHT, offset: ITEM_HEIGHT * index, index }
                             )}
                             onScrollToIndexFailed={(info) => {
+                                // Index sınırları kontrol et
                                 const wait = new Promise(resolve => setTimeout(resolve, 500));
                                 wait.then(() => {
-                                    flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+                                    const dataLength = flatListRef.current?.props?.data?.length || 0;
+                                    if (info.index >= 0 && info.index < dataLength) {
+                                        flatListRef.current?.scrollToIndex({ index: info.index, animated: true });
+                                    }
                                 });
                             }}
                             renderItem={({ item }) => (
@@ -217,8 +235,18 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                 const countryId = tempSelectedLocation.country.id;
                 try {
                     setError('');
-                    const freshData = await DiyanetManuelService.getStates(countryId);
-                    setCities(freshData);
+                    // Try cache first
+                    const cachedCities = await loadCachedCities(countryId);
+                    if (cachedCities && cachedCities.length > 0) {
+                        setCities(cachedCities);
+                    } else {
+                        // Fetch from API
+                        const freshData = await DiyanetManuelService.getStates(countryId);
+                        setCities(freshData);
+                        // Save to cache
+                        await saveCachedCities(countryId, freshData);
+                    }
+                // eslint-disable-next-line no-catch-shadow
                 } catch (error) {
                     console.warn('Error loading cities for temp location:', error);
                     setError('Şehirler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
@@ -238,8 +266,18 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
                 const cityId = tempSelectedLocation.city.id;
                 try {
                     setError('');
-                    const freshData = await DiyanetManuelService.getDistricts(cityId);
-                    setDistricts(freshData);
+                    // Try cache first
+                    const cachedDistricts = await loadCachedDistricts(cityId);
+                    if (cachedDistricts && cachedDistricts.length > 0) {
+                        setDistricts(cachedDistricts);
+                    } else {
+                        // Fetch from API
+                        const freshData = await DiyanetManuelService.getDistricts(cityId);
+                        setDistricts(freshData);
+                        // Save to cache
+                        await saveCachedDistricts(cityId, freshData);
+                    }
+                // eslint-disable-next-line no-catch-shadow
                 } catch (error) {
                     console.warn('Error loading districts for temp location:', error);
                     setError('İlçeler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.');
@@ -289,8 +327,17 @@ const LocationPicker: React.FC<LocationPickerProps> = ({ onClose }) => {
         setLoading(true);
         setError('');
         try {
-            const data = await DiyanetManuelService.getCountries();
-            setCountries(data);
+            // Try cache first
+            const cachedCountries = await loadCachedCountries();
+            if (cachedCountries && cachedCountries.length > 0) {
+                setCountries(cachedCountries);
+            } else {
+                // Fetch from API
+                const data = await DiyanetManuelService.getCountries();
+                setCountries(data);
+                // Save to cache
+                await saveCachedCountries(data);
+            }
         } catch (err) {
             setError('Veriler yüklenirken bir hata oluştu.');
         } finally {

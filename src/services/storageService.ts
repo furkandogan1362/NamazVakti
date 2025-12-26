@@ -384,3 +384,66 @@ export const loadCalibrationPreference = async (): Promise<boolean> => {
         return false;
     }
 };
+
+// --- Cache Functions for Location Picker ---
+
+const CACHE_KEY_COUNTRIES = 'cache_countries_v1';
+const CACHE_KEY_CITIES_PREFIX = 'cache_cities_v1_';
+const CACHE_KEY_DISTRICTS_PREFIX = 'cache_districts_v1_';
+
+// Countries Cache
+export const saveCachedCountries = async (countries: PlaceItem[]): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(CACHE_KEY_COUNTRIES, JSON.stringify(countries));
+    } catch (error) {
+        console.error('Error saving cached countries:', error);
+    }
+};
+
+export const loadCachedCountries = async (): Promise<PlaceItem[] | null> => {
+    try {
+        const data = await AsyncStorage.getItem(CACHE_KEY_COUNTRIES);
+        return data ? JSON.parse(data) : null;
+    } catch (error) {
+        console.error('Error loading cached countries:', error);
+        return null;
+    }
+};
+
+// Cities Cache
+export const saveCachedCities = async (countryId: number, cities: PlaceItem[]): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(`${CACHE_KEY_CITIES_PREFIX}${countryId}`, JSON.stringify(cities));
+    } catch (error) {
+        console.error('Error saving cached cities:', error);
+    }
+};
+
+export const loadCachedCities = async (countryId: number): Promise<PlaceItem[] | null> => {
+    try {
+        const data = await AsyncStorage.getItem(`${CACHE_KEY_CITIES_PREFIX}${countryId}`);
+        return data ? JSON.parse(data) : null;
+    } catch (error) {
+        console.error('Error loading cached cities:', error);
+        return null;
+    }
+};
+
+// Districts Cache
+export const saveCachedDistricts = async (cityId: number, districts: PlaceItem[]): Promise<void> => {
+    try {
+        await AsyncStorage.setItem(`${CACHE_KEY_DISTRICTS_PREFIX}${cityId}`, JSON.stringify(districts));
+    } catch (error) {
+        console.error('Error saving cached districts:', error);
+    }
+};
+
+export const loadCachedDistricts = async (cityId: number): Promise<PlaceItem[] | null> => {
+    try {
+        const data = await AsyncStorage.getItem(`${CACHE_KEY_DISTRICTS_PREFIX}${cityId}`);
+        return data ? JSON.parse(data) : null;
+    } catch (error) {
+        console.error('Error loading cached districts:', error);
+        return null;
+    }
+};

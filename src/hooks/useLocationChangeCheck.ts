@@ -9,6 +9,7 @@ export const useLocationChangeCheck = () => {
     const [showChangeModal, setShowChangeModal] = useState(false);
     const [newLocation, setNewLocation] = useState<CityDetail | null>(null);
     const [isChecking, setIsChecking] = useState(false);
+    const [shouldAutoApply, setShouldAutoApply] = useState(false);
     const { isOnline } = useNetwork();
 
     const checkLocationChange = useCallback(async () => {
@@ -46,6 +47,7 @@ export const useLocationChangeCheck = () => {
                         );
 
                         if (!cityDetail) {
+                            console.log('🔍 GPS konum bilgisi alınamadı');
                             setIsChecking(false);
                             return;
                         }
@@ -54,12 +56,25 @@ export const useLocationChangeCheck = () => {
                         const locationMode = await loadLocationMode();
                         let currentCityName = '';
                         let currentDistrictName = '';
+                        let currentLocationId = '';
+
+                        console.log('🔍 Konum değişikliği kontrolü:', {
+                            locationMode,
+                            newLocation: `${cityDetail.name}, ${cityDetail.city}`,
+                            newLocationId: cityDetail.id,
+                        });
 
                         if (locationMode === 'gps') {
                             const gpsCityInfo = await loadGPSCityInfo();
                             if (gpsCityInfo) {
                                 currentCityName = gpsCityInfo.city;
                                 currentDistrictName = gpsCityInfo.name;
+                                currentLocationId = gpsCityInfo.id;
+                                console.log('🔍 Mevcut GPS konumu:', {
+                                    name: gpsCityInfo.name,
+                                    city: gpsCityInfo.city,
+                                    id: gpsCityInfo.id,
+                                });
                             }
                         } else {
                             // Manuel mod - Storage'dan oku (Context yerine)
@@ -68,6 +83,10 @@ export const useLocationChangeCheck = () => {
                             if (savedLocation && savedLocation.city && savedLocation.district) {
                                 currentCityName = savedLocation.city.name;
                                 currentDistrictName = savedLocation.district.name;
+                                console.log('🔍 Mevcut manuel konum:', {
+                                    name: savedLocation.district.name,
+                                    city: savedLocation.city.name,
+                                });
                             }
                         }
 
@@ -75,16 +94,36 @@ export const useLocationChangeCheck = () => {
                         // Normalize strings for comparison to avoid case/locale issues
                         const normalize = (str: string) => str ? str.toLowerCase().trim() : '';
 
-                        const isDifferent =
+                        // ID ile karşılaştır (daha güvenilir)
+                        const isDifferentById = currentLocationId && cityDetail.id !== currentLocationId;
+
+                        const isDifferentByName =
                             (currentCityName && normalize(cityDetail.city) !== normalize(currentCityName)) ||
                             (currentDistrictName && normalize(cityDetail.name) !== normalize(currentDistrictName));
+
+                        const isDifferent = isDifferentById || isDifferentByName;
 
                         // Eğer hiç konum yoksa (ilk açılış vs) modal gösterme
                         const hasExistingLocation = currentCityName !== '' || currentDistrictName !== '';
 
+                        console.log('🔍 Konum karşılaştırma sonucu:', {
+                            isDifferentById,
+                            isDifferentByName,
+                            isDifferent,
+                            hasExistingLocation,
+                            willShowModal: hasExistingLocation && isDifferent,
+                        });
+
                         if (hasExistingLocation && isDifferent) {
+                            console.log('📍 GPS konum değişikliği tespit edildi:', `${currentDistrictName} -> ${cityDetail.name}`);
                             setNewLocation(cityDetail);
                             setShowChangeModal(true);
+                        } else if (!hasExistingLocation && locationMode === 'gps') {
+                            // GPS modunda ama mevcut konum yok - yeni konumu otomatik kullan (modal gösterme)
+                            console.log('📍 GPS modunda ilk konum tespit edildi:', cityDetail.name);
+                            setNewLocation(cityDetail);
+                            // Modal göstermeden otomatik uygulama için flag set et
+                            setShouldAutoApply(true);
                         }
                     } catch (error) {
                         console.error('Error checking location change:', error);
@@ -126,5 +165,7 @@ export const useLocationChangeCheck = () => {
         newLocation,
         setShowChangeModal,
         checkLocationChange,
+        shouldAutoApply,
+        setShouldAutoApply,
     };
 };

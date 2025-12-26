@@ -99,7 +99,7 @@ export const LocationProvider: React.FC<{children: React.ReactNode}> = ({ childr
     }, [savedLocations]);
 
     const removeSavedLocation = useCallback(async (location: SelectedLocation) => {
-        const newLocations = savedLocations.filter(l => 
+        const newLocations = savedLocations.filter(l =>
             !(l.country?.id === location.country?.id &&
             l.city?.id === location.city?.id &&
             l.district?.id === location.district?.id)

@@ -6,44 +6,210 @@ const { WidgetModule } = NativeModules;
 // Cache for timezone IDs to avoid repeated API calls
 const timezoneCache: { [key: string]: string } = {};
 
+// Dünya genelinde ülke ismi varyasyonları -> country_code eşleştirmesi
+// Bu sayede yerel dildeki ülke isimleri API'deki isimlerle eşleştirilir
+const COUNTRY_CODE_MAP: { [key: string]: string[] } = {
+    'us': ['abd', 'amerika', 'united states', 'usa', 'birlesik devletler', 'amerikan'],
+    'gb': ['ingiltere', 'birlesik krallik', 'united kingdom', 'uk', 'britain', 'great britain', 'england'],
+    'tr': ['turkiye', 'turkey', 'türkiye'],
+    'ru': ['rusya', 'russia', 'rusya federasyonu', 'russian federation'],
+    'cn': ['cin', 'china', 'çin', 'cinhalk cumhuriyeti'],
+    'au': ['avustralya', 'australia', 'avusturalya'],
+    'ca': ['kanada', 'canada'],
+    'br': ['brezilya', 'brazil', 'brasil'],
+    'mx': ['meksika', 'mexico', 'mejico'],
+    'id': ['endonezya', 'indonesia', 'indonezya'],
+    'in': ['hindistan', 'india', 'bharata'],
+    'de': ['almanya', 'germany', 'deutschland'],
+    'fr': ['fransa', 'france'],
+    'es': ['ispanya', 'spain', 'espana', 'españa'],
+    'it': ['italya', 'italy', 'italia'],
+    'jp': ['japonya', 'japan', 'nippon'],
+    'kr': ['guney kore', 'south korea', 'korea', 'kore'],
+    'sa': ['suudi arabistan', 'saudi arabia', 'arabistan'],
+    'ae': ['birlesik arap emirlikleri', 'uae', 'united arab emirates', 'bae', 'dubai'],
+    'eg': ['misir', 'egypt', 'mısır'],
+    'za': ['guney afrika', 'south africa'],
+    'ar': ['arjantin', 'argentina'],
+    'cl': ['sili', 'chile', 'şili'],
+    'pe': ['peru'],
+    'co': ['kolombiya', 'colombia'],
+    've': ['venezuela'],
+    'pk': ['pakistan'],
+    'bd': ['banglades', 'bangladesh'],
+    'my': ['malezya', 'malaysia'],
+    'th': ['tayland', 'thailand', 'siam'],
+    'vn': ['vietnam'],
+    'ph': ['filipinler', 'philippines'],
+    'ng': ['nijerya', 'nigeria'],
+    'ke': ['kenya'],
+    'ma': ['fas', 'morocco', 'maroc'],
+    'dz': ['cezayir', 'algeria', 'algerie'],
+    'tn': ['tunus', 'tunisia'],
+    'ly': ['libya'],
+    'ir': ['iran'],
+    'iq': ['irak', 'iraq'],
+    'sy': ['suriye', 'syria'],
+    'lb': ['lubnan', 'lebanon', 'lübnan'],
+    'jo': ['urdun', 'jordan', 'ürdün'],
+    'il': ['israil', 'israel'],
+    'ps': ['filistin', 'palestine'],
+    'kz': ['kazakistan', 'kazakhstan'],
+    'uz': ['ozbekistan', 'uzbekistan', 'özbekistan'],
+    'az': ['azerbaycan', 'azerbaijan'],
+    'ge': ['gurcistan', 'georgia', 'gürcistan'],
+    'ua': ['ukrayna', 'ukraine'],
+    'pl': ['polonya', 'poland', 'polska'],
+    'cz': ['cekya', 'czech', 'czechia', 'çekya'],
+    'at': ['avusturya', 'austria', 'osterreich'],
+    'ch': ['isvicre', 'switzerland', 'isviçre', 'schweiz'],
+    'nl': ['hollanda', 'netherlands', 'nederland'],
+    'be': ['belcika', 'belgium', 'belçika'],
+    'se': ['isvec', 'sweden', 'isveç'],
+    'no': ['norvec', 'norway', 'norveç'],
+    'dk': ['danimarka', 'denmark'],
+    'fi': ['finlandiya', 'finland'],
+    'gr': ['yunanistan', 'greece', 'hellas'],
+    'pt': ['portekiz', 'portugal'],
+    'ie': ['irlanda', 'ireland'],
+    'nz': ['yeni zelanda', 'new zealand'],
+    'sg': ['singapur', 'singapore'],
+    'hk': ['hong kong'],
+    'tw': ['tayvan', 'taiwan'],
+    'mo': ['makao', 'macao', 'macau'],
+};
+
+// Konum bilgisinden timezone hesapla (cache ile)
+// Önce district (ilçe/kasaba), sonra city (şehir/eyalet), en son country (ülke) ile arar
+const getTimezoneForLocation = async (locationDetail: { country: string; city: string; district: string }): Promise<string> => {
+    const deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    if (!locationDetail?.district && !locationDetail?.city) {
+        return deviceTimezone;
+    }
+
+    // Cache key: district + city + country kombinasyonu (en spesifik)
+    const cacheKey = `${locationDetail.district}-${locationDetail.city}-${locationDetail.country}`;
+
+    // Cache'de varsa direkt döndür
+    if (timezoneCache[cacheKey]) {
+        console.log('🕐 Widget timezone (cache):', timezoneCache[cacheKey]);
+        return timezoneCache[cacheKey];
+    }
+
+    // String normalizasyonu
+    const normalizeString = (str: string) => str ? str.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim() : '';
+    const normalizedCountry = normalizeString(locationDetail.country);
+
+    // Ülke eşleştirme fonksiyonu - dünya geneli destekli
+    const matchesCountry = (result: any): boolean => {
+        const countryName = normalizeString(result.country || '');
+        const countryCode = normalizeString(result.country_code || '');
+
+        // 1. Country code map'ten kontrol et (en güvenilir)
+        for (const [code, aliases] of Object.entries(COUNTRY_CODE_MAP)) {
+            // Kullanıcının ülkesi bu alias'lardan biri mi?
+            const userCountryMatches = aliases.some(alias =>
+                normalizedCountry.includes(normalizeString(alias)) ||
+                normalizeString(alias).includes(normalizedCountry)
+            );
+
+            if (userCountryMatches && countryCode === code) {
+                return true;
+            }
+        }
+
+        // 2. Direkt isim veya kod eşleşmesi
+        if (countryName.includes(normalizedCountry) || normalizedCountry.includes(countryName)) {
+            return true;
+        }
+
+        if (countryCode === normalizedCountry) {
+            return true;
+        }
+
+        return false;
+    };
+
+    // API'den timezone ara - verilen query ile
+    const searchTimezone = async (query: string): Promise<string | null> => {
+        try {
+            const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(query)}&count=10&language=tr&format=json`;
+            const geoRes = await fetch(geoUrl);
+            const geoData = await geoRes.json();
+
+            if (geoData.results && geoData.results.length > 0) {
+                // Önce ülke eşleşen sonucu bul
+                const matchedResult = geoData.results.find(matchesCountry);
+
+                if (matchedResult?.timezone) {
+                    return matchedResult.timezone;
+                }
+            }
+        } catch (e) {
+            console.warn('Failed to fetch timezone:', e);
+        }
+        return null;
+    };
+
+    try {
+        let foundTimezone: string | null = null;
+
+        // 1. Önce district (ilçe/kasaba) ile ara - en spesifik
+        if (locationDetail.district) {
+            console.log('🔍 Timezone araması (district):', locationDetail.district);
+            foundTimezone = await searchTimezone(locationDetail.district);
+            if (foundTimezone) {
+                console.log('🕐 Widget timezone (API - district):', foundTimezone, 'for', locationDetail.district);
+            }
+        }
+
+        // 2. District'te bulunamazsa city (şehir/eyalet) ile ara
+        if (!foundTimezone && locationDetail.city && locationDetail.city !== locationDetail.district) {
+            console.log('🔍 Timezone araması (city):', locationDetail.city);
+            foundTimezone = await searchTimezone(locationDetail.city);
+            if (foundTimezone) {
+                console.log('🕐 Widget timezone (API - city):', foundTimezone, 'for', locationDetail.city);
+            }
+        }
+
+        // 3. Hala bulunamazsa country (ülke) ile ara
+        if (!foundTimezone && locationDetail.country) {
+            console.log('🔍 Timezone araması (country):', locationDetail.country);
+            foundTimezone = await searchTimezone(locationDetail.country);
+            if (foundTimezone) {
+                console.log('🕐 Widget timezone (API - country):', foundTimezone, 'for', locationDetail.country);
+            }
+        }
+
+        if (foundTimezone) {
+            timezoneCache[cacheKey] = foundTimezone;
+            return foundTimezone;
+        }
+    } catch (e) {
+        console.warn('Failed to fetch timezone for widget:', e);
+    }
+
+    // Fallback: cihaz timezone'u
+    console.log('🕐 Widget timezone (fallback):', deviceTimezone);
+    return deviceTimezone;
+};
+
 export const updateWidget = async (
     locationName: string,
     prayerTimes: PrayerTime,
     locationDetail?: { country: string; city: string; district: string },
-    timezone?: string
+    _timezone?: string // Artık kullanılmıyor, geriye uyumluluk için tutuldu
 ) => {
     if (Platform.OS !== 'android') {return;}
 
     try {
-        // Use provided timezone or default to device timezone
-        let timezoneId = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        // Her zaman konum bilgisinden timezone hesapla (state senkronizasyon sorunlarını önler)
+        const timezoneId = locationDetail
+            ? await getTimezoneForLocation(locationDetail)
+            : Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-        // Only fetch if timezone is not provided
-        if (!timezone && locationDetail?.city) {
-            const cacheKey = `${locationDetail.city}-${locationDetail.country}`;
-
-            if (timezoneCache[cacheKey] !== undefined) {
-                timezoneId = timezoneCache[cacheKey];
-            } else {
-                try {
-                    // 1. Get Coordinates & Timezone directly from Search
-                    // Open-Meteo search endpoint returns timezone if available
-                    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationDetail.city)}&count=1&language=tr&format=json`;
-                    const geoRes = await fetch(geoUrl);
-                    const geoData = await geoRes.json();
-
-                    if (geoData.results && geoData.results.length > 0) {
-                        const result = geoData.results[0];
-                        if (result.timezone) {
-                            timezoneId = result.timezone;
-                            timezoneCache[cacheKey] = timezoneId;
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Failed to fetch timezone:', e);
-                }
-            }
-        }
+        console.log('📱 Widget güncelleniyor (final):', { locationName, timezoneId });
 
         // Widget expects a JSON string with keys: fajr, sun, dhuhr, asr, maghrib, isha
         const widgetData = {
@@ -72,35 +238,16 @@ export const syncWidgetMonthlyCache = async (
     locationName: string,
     monthlyPrayerTimes: PrayerTime[],
     locationDetail?: { country: string; city: string; district: string },
-    timezone?: string
+    _timezone?: string // Artık kullanılmıyor, geriye uyumluluk için tutuldu
 ) => {
     if (Platform.OS !== 'android') {return;}
     try {
-        // Use provided timezone or default to device timezone
-        let timezoneId = timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+        // Her zaman konum bilgisinden timezone hesapla (state senkronizasyon sorunlarını önler)
+        const timezoneId = locationDetail
+            ? await getTimezoneForLocation(locationDetail)
+            : Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-        // Only fetch if timezone is not provided
-        if (!timezone && locationDetail?.city) {
-            const cacheKey = `${locationDetail.city}-${locationDetail.country}`;
-            if (timezoneCache[cacheKey] !== undefined) {
-                timezoneId = timezoneCache[cacheKey];
-            } else {
-                try {
-                    const geoUrl = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(locationDetail.city)}&count=1&language=tr&format=json`;
-                    const geoRes = await fetch(geoUrl);
-                    const geoData = await geoRes.json();
-                    if (geoData.results && geoData.results.length > 0) {
-                        const result = geoData.results[0];
-                        if (result.timezone) {
-                            timezoneId = result.timezone;
-                            timezoneCache[cacheKey] = timezoneId;
-                        }
-                    }
-                } catch (e) {
-                    console.warn('Failed to fetch timezone for monthly cache:', e);
-                }
-            }
-        }
+        console.log('📱 Widget aylık cache güncelleniyor (final):', { locationName, timezoneId });
 
         // Prepare compact monthly payload for native widget
         const days = monthlyPrayerTimes.map(pt => ({

@@ -22,6 +22,7 @@ import {
     loadCities,
     saveDistricts,
     loadDistricts,
+    loadLocationMode,
 } from '../services/storageService';
 
 export const useLocationData = () => {
@@ -36,8 +37,17 @@ export const useLocationData = () => {
     const { isOnline } = useNetwork();
 
     // Uygulama başlangıcında kaydedilmiş konumu yükle
+    // Sadece manuel modda yükle, GPS modunda yükleme
     useEffect(() => {
         const initializeLocationData = async () => {
+            const locationMode = await loadLocationMode();
+
+            // GPS modundaysa manuel konumu yükleme
+            if (locationMode === 'gps') {
+                console.log('📍 GPS modunda, manuel konum yüklenmedi');
+                return;
+            }
+
             const savedLocation = await loadLocationData();
             if (savedLocation && savedLocation.district) {
                 setSelectedLocation(savedLocation);

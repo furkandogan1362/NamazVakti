@@ -100,22 +100,34 @@ export const usePrayerTimes = (timezone?: string) => {
     const [currentDayPrayerTime, setCurrentDayPrayerTime] = useState<PrayerTime | null>(null);
     const [lastFetchDate, setLastFetchDate] = useState<Date | null>(null);
     const [lastLocationId, setLastLocationId] = useState<number | null>(null);
+    const [isLocationChanging, setIsLocationChanging] = useState<boolean>(false);
     const { selectedLocation } = useLocation();
     const { isOnline } = useNetwork();
 
     const allPrayerTimesRef = useRef(allPrayerTimes);
+    const prevDistrictIdRef = useRef<number | null>(null);
 
     useEffect(() => {
         allPrayerTimesRef.current = allPrayerTimes;
     }, [allPrayerTimes]);
 
-    // Konum değiştiğinde eski verileri temizle (yanlış veri göstermemek için)
+    // Konum değiştiğinde eski verileri temizle ve yeni veri çekilmesini tetikle
     useEffect(() => {
-        if (selectedLocation.district && lastLocationId !== null && selectedLocation.district.id !== lastLocationId) {
+        const currentDistrictId = selectedLocation.district?.id || null;
+        const prevDistrictId = prevDistrictIdRef.current;
+
+        // İlk yükleme değilse ve konum değiştiyse
+        if (prevDistrictId !== null && currentDistrictId !== null && currentDistrictId !== prevDistrictId) {
+            console.log('📍 Konum değişikliği algılandı:', prevDistrictId, '->', currentDistrictId);
+            setIsLocationChanging(true);
             setAllPrayerTimes([]);
             setCurrentDayPrayerTime(null);
+            // lastLocationId'yi güncelle ki fetchPrayerTimes yeni veriyi çeksin
+            setLastLocationId(prevDistrictId); // Önceki ID, fetchPrayerTimes'da karşılaştırma için
         }
-    }, [selectedLocation.district, lastLocationId]);
+
+        prevDistrictIdRef.current = currentDistrictId;
+    }, [selectedLocation.district?.id]);
 
     const updateCurrentDayPrayerTime = useCallback(() => {
         const today = getLocalTodayDate(timezone);
@@ -163,6 +175,7 @@ export const usePrayerTimes = (timezone?: string) => {
         // Konum değişti mi kontrol et (null ise ilk seçim demek, fetch yapmalı)
         const isFirstSelection = lastLocationId === null;
         const locationChanged = !isFirstSelection && lastLocationId !== districtId;
+        const isLocationChangeInProgress = isLocationChanging;
 
         // Bugünün verisi var mı kontrol et
         const today = getLocalTodayDate(timezone);
@@ -179,15 +192,23 @@ export const usePrayerTimes = (timezone?: string) => {
             allPrayerTimesRef.current[0].gregorianDateLong !== undefined;
 
         // İlk seçim, konum değişimi, bugünün verisi yok, yeterli veri yok veya tarih alanları eksikse fetch yap
-        const shouldFetch = isFirstSelection || locationChanged || !hasDataForToday || !hasEnoughData || !hasDateFields;
+        const shouldFetch = isFirstSelection || locationChanged || isLocationChangeInProgress || !hasDataForToday || !hasEnoughData || !hasDateFields;
 
         if (shouldFetch) {
             try {
+                console.log('🔄 Manuel namaz vakitleri çekiliyor...', { districtId, locationChanged, isLocationChangeInProgress });
                 const apiData = await DiyanetManuelService.getPrayerTimes(districtId, 'Monthly');
                 const transformedData = transformPrayerData(apiData);
 
                 setAllPrayerTimes(transformedData);
                 savePrayerTimes(transformedData);
+
+                // currentDayPrayerTime'ı hemen güncelle
+                const todayDate = getLocalTodayDate(timezone);
+                const currentDay = transformedData.find(pt => pt.date.split('T')[0] === todayDate);
+                if (currentDay) {
+                    setCurrentDayPrayerTime(currentDay);
+                }
 
                 const newFetchDate = new Date();
                 setLastFetchDate(newFetchDate);
@@ -195,13 +216,18 @@ export const usePrayerTimes = (timezone?: string) => {
 
                 setLastLocationId(districtId);
                 saveLastLocationId(districtId);
+
+                // Konum değişikliği tamamlandı
+                setIsLocationChanging(false);
+                console.log('✅ Manuel namaz vakitleri güncellendi:', districtId);
             } catch (error) {
                 // Kritik olmayan hata: Arka planda veri güncellenemedi, cache kullanılacak
                 console.warn('Warning fetching prayer times:', error);
+                setIsLocationChanging(false);
 
                 // Sadece konum değişmediyse cache'den yükle
                 // Konum değiştiyse cache'deki veri eski konuma aittir, yükleme!
-                if (!locationChanged) {
+                if (!locationChanged && !isLocationChangeInProgress) {
                     const cachedTimes = await loadPrayerTimes();
                     if (cachedTimes && cachedTimes.length > 0) {
                         setAllPrayerTimes(cachedTimes);
@@ -210,8 +236,12 @@ export const usePrayerTimes = (timezone?: string) => {
             }
         } else {
             setLastLocationId(districtId);
+            // Konum değişikliği işaretini temizle
+            if (isLocationChanging) {
+                setIsLocationChanging(false);
+            }
         }
-    }, [isOnline, selectedLocation.district, lastLocationId, timezone]);
+    }, [isOnline, selectedLocation.district, lastLocationId, timezone, isLocationChanging]);
 
     // Başlangıçta cache'den yükle
     useEffect(() => {

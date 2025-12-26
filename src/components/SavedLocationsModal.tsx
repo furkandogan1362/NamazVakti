@@ -51,11 +51,11 @@ const SavedLocationsModal: React.FC<SavedLocationsModalProps> = ({
 
             return () => task.cancel();
         }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible, savedLocations, currentLocation]);
 
     const isLocationSelected = (loc: SelectedLocation) => {
         // Use passed currentLocation prop if available, otherwise fallback to context
-        const targetCountry = currentLocation?.country || selectedLocation.country?.name;
         const targetCity = currentLocation?.city || selectedLocation.city?.name;
         const targetDistrict = currentLocation?.district || selectedLocation.district?.name;
 
@@ -109,7 +109,21 @@ const SavedLocationsModal: React.FC<SavedLocationsModalProps> = ({
 
     const executeDelete = () => {
         if (locationToDelete) {
+            // Silinen konum aktif konum mu kontrol et
+            const isDeletingActiveLocation = isLocationSelected(locationToDelete);
+
             removeSavedLocation(locationToDelete);
+
+            // Eğer aktif konum silindiyse, birincil konumu (ilk konum) seç
+            if (isDeletingActiveLocation && savedLocations.length > 1) {
+                // savedLocations henüz güncellenmedi, o yüzden silindikten sonraki ilk konumu bulmalıyız
+                const remainingLocations = savedLocations.filter(l => !isSameLocation(l, locationToDelete));
+                if (remainingLocations.length > 0) {
+                    // İlk konum (birincil konum) seçilir
+                    setSelectedLocation(remainingLocations[0]);
+                }
+            }
+
             setLocationToDelete(null);
             setOpenRowIndex(null);
         }
@@ -120,7 +134,7 @@ const SavedLocationsModal: React.FC<SavedLocationsModalProps> = ({
         setLocationToDelete(null);
     };
 
-    const renderRightActions = (progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>, location: SelectedLocation) => {
+    const renderRightActions = (progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>, _location: SelectedLocation) => {
         const scale = dragX.interpolate({
             inputRange: [-100, 0],
             outputRange: [1, 0],
@@ -148,7 +162,7 @@ const SavedLocationsModal: React.FC<SavedLocationsModalProps> = ({
                     </View>
                 )}
                 <Swipeable
-                    ref={ref => swipeableRows.current[index] = ref}
+                    ref={ref => { swipeableRows.current[index] = ref; }}
                     renderRightActions={(progress, dragX) => renderRightActions(progress, dragX, item)}
                     onSwipeableWillOpen={() => confirmDelete(item, index)}
                     containerStyle={styles.swipeableContainer}
@@ -201,6 +215,7 @@ const SavedLocationsModal: React.FC<SavedLocationsModalProps> = ({
                 </Swipeable>
             </View>
         );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [savedLocations, selectedLocation, theme, currentLocation]);
 
     return (
@@ -284,7 +299,7 @@ const SavedLocationsModal: React.FC<SavedLocationsModalProps> = ({
     );
 };
 
-const createStyles = (theme: any, isSmallScreen: boolean, _screenWidth: number) => {
+const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number) => {
     return StyleSheet.create({
         modalOverlay: {
             flex: 1,
