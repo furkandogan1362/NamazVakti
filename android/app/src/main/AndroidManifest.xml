@@ -51,6 +51,11 @@
               android:resource="@xml/prayer_times_widget_info" />
       </receiver>
 
+      <!-- Google Maps API Key -->
+      <meta-data
+          android:name="com.google.android.geo.API_KEY"
+          android:value="AIzaSyDiN9bzwNU5qvMicj9Ywbfxwd1AuoKnsyk" />
+
       <service
           android:name=".PrayerTimesService"
           android:enabled="true"

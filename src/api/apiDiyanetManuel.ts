@@ -165,7 +165,11 @@ apiClient.interceptors.response.use(
     // Network Error veya Timeout durumunda tekrar dene (Max 3 kere)
     if ((error.code === 'ECONNABORTED' || error.message === 'Network Error' || !error.response) && originalRequest._retryCount < 3) {
       originalRequest._retryCount += 1;
-      console.log(`⚠️ [ManuelAPI] Ağ hatası, tekrar deneniyor (${originalRequest._retryCount}/3)...`);
+
+      // Sadece production'da veya debug modunda değilse log göster
+      if (__DEV__ === false) {
+        console.log(`⚠️ [ManuelAPI] Ağ hatası, tekrar deneniyor (${originalRequest._retryCount}/3)...`);
+      }
 
       // Exponential backoff (1s, 2s, 4s bekle)
       const delay = Math.pow(2, originalRequest._retryCount - 1) * 1000;

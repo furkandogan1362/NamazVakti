@@ -13,6 +13,7 @@ import {
     Modal,
     TouchableOpacity,
     Animated,
+    Platform,
 } from 'react-native';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../contexts/ThemeContext';
@@ -23,6 +24,7 @@ interface LocationMethodModalProps {
     onClose: () => void;
     onSelectGPS: () => void;
     onSelectManual: () => void;
+    onSelectMap?: () => void;
 }
 
 const LocationMethodModal: React.FC<LocationMethodModalProps> = ({
@@ -30,6 +32,7 @@ const LocationMethodModal: React.FC<LocationMethodModalProps> = ({
     onClose,
     onSelectGPS,
     onSelectManual,
+    onSelectMap,
 }) => {
     const { theme } = useTheme();
 
@@ -79,6 +82,7 @@ const LocationMethodModal: React.FC<LocationMethodModalProps> = ({
     const handleClose = () => animateOut(onClose);
     const handleSelectGPS = () => animateOut(onSelectGPS);
     const handleSelectManual = () => animateOut(onSelectManual);
+    const handleSelectMap = () => onSelectMap && animateOut(onSelectMap);
 
     const styles = createStyles(theme);
 
@@ -123,6 +127,26 @@ const LocationMethodModal: React.FC<LocationMethodModalProps> = ({
                                 </View>
                                 <MaterialIcons name="chevron-right" size={24} color={theme.colors.secondaryText} />
                             </TouchableOpacity>
+
+                            {/* Haritadan Konum Seç (Sadece Android) */}
+                            {Platform.OS === 'android' && onSelectMap && (
+                                <TouchableOpacity
+                                    style={styles.optionButton}
+                                    onPress={handleSelectMap}
+                                    activeOpacity={0.7}
+                                >
+                                    <View style={styles.mapOptionIconContainer}>
+                                        <MaterialIcons name="map" size={28} color="#FFFFFF" />
+                                    </View>
+                                    <View style={styles.optionTextContainer}>
+                                        <Text style={styles.optionTitle}>Haritadan Konum Bul</Text>
+                                        <Text style={styles.optionDescription}>
+                                            Harita üzerinde parmağınızla kaydırarak konumunuzu seçin
+                                        </Text>
+                                    </View>
+                                    <MaterialIcons name="chevron-right" size={24} color={theme.colors.secondaryText} />
+                                </TouchableOpacity>
+                            )}
 
                             {/* Manuel Seçeneği */}
                             <TouchableOpacity
@@ -220,6 +244,15 @@ const createStyles = (theme: any) => {
             alignItems: 'center',
             marginRight: 16,
             backgroundColor: theme.colors.accent,
+        },
+        mapOptionIconContainer: {
+            width: 52,
+            height: 52,
+            borderRadius: 26,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 16,
+            backgroundColor: '#10B981',
         },
         optionTextContainer: {
             flex: 1,
