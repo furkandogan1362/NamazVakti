@@ -243,7 +243,7 @@ const createStyles = (theme: any) => {
             justifyContent: 'center',
             alignItems: 'center',
             marginRight: 16,
-            backgroundColor: theme.colors.accent,
+            backgroundColor: '#0284C7',
         },
         mapOptionIconContainer: {
             width: 52,
@@ -252,7 +252,7 @@ const createStyles = (theme: any) => {
             justifyContent: 'center',
             alignItems: 'center',
             marginRight: 16,
-            backgroundColor: '#10B981',
+            backgroundColor: '#0284C7',
         },
         optionTextContainer: {
             flex: 1,

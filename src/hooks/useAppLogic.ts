@@ -30,6 +30,7 @@ import {
     clearGPSData,
     loadCachedCountries,
     saveCachedCountries,
+    saveAutoLocationUpdatePreference,
 } from '../services/storageService';
 
 export type ScreenType = 'home' | 'weekly' | 'monthly';
@@ -271,7 +272,8 @@ export const useAppLogic = () => {
     }, [isOnline, showOfflineModal]);
 
     // Handlers
-    const handleGPSComplete = useCallback(async (result: GPSLocationResult) => {
+    // isAutoUpdate: true ise otomatik GPS güncellemesi, false ise kullanıcı yeni konum ekledi
+    const handleGPSComplete = useCallback(async (result: GPSLocationResult, isAutoUpdate: boolean = false) => {
         setShowGPSService(false);
 
         if (result.cancelled) {
@@ -293,12 +295,16 @@ export const useAppLogic = () => {
             setSelectedLocation({ country: null, city: null, district: null });
             setHasCachedData(true);
 
-            const selectedLocationToAdd: SelectedLocation = {
-                country: { name: result.cityDetail.country, code: '', id: 0 },
-                city: { name: result.cityDetail.city, code: '', id: 0 },
-                district: { name: result.cityDetail.name, code: '', id: parseInt(result.cityDetail.id, 10) },
-            };
-            addSavedLocation(selectedLocationToAdd);
+            // Sadece kullanıcı manuel olarak yeni konum eklediyse kayıtlı konumlara ekle
+            // Otomatik GPS güncellemesi ise ekleme (birincil konum olarak güncelle)
+            if (!isAutoUpdate) {
+                const selectedLocationToAdd: SelectedLocation = {
+                    country: { name: result.cityDetail.country, code: '', id: 0 },
+                    city: { name: result.cityDetail.city, code: '', id: 0 },
+                    district: { name: result.cityDetail.name, code: '', id: parseInt(result.cityDetail.id, 10) },
+                };
+                addSavedLocation(selectedLocationToAdd);
+            }
 
             Promise.all([
                 saveLocationMode('gps'),
@@ -561,9 +567,15 @@ export const useAppLogic = () => {
         }
     }, [memoizedPrayerTimes, selectedLocation, gpsLocationInfo, locationMode, isGPSMode]);
 
-    const handleConfirmLocationChange = async () => {
+    const handleConfirmLocationChange = async (autoUpdateEnabled: boolean = false) => {
         if (!newLocation) { return; }
         setShowChangeModal(false);
+
+        // Otomatik güncelleme tercihi kaydedilsin
+        if (autoUpdateEnabled) {
+            await saveAutoLocationUpdatePreference(true);
+            console.log('📍 Otomatik konum güncelleme tercihi kaydedildi');
+        }
 
         try {
             const prayerTimesData = await DiyanetService.getPrayerTimes(newLocation.id, 'Monthly');
@@ -589,13 +601,19 @@ export const useAppLogic = () => {
                 prayerTimes: convertedPrayerTimes,
             };
 
-            await handleGPSComplete(result);
+            // Otomatik GPS güncellemesi - yeni konum olarak kaydetme
+            await handleGPSComplete(result, true);
         } catch (error) {
             console.error('❌ GPS konum değişikliği hatası:', error);
         }
     };
 
-    const handleCancelLocationChange = () => {
+    const handleCancelLocationChange = async (autoUpdateEnabled: boolean = false) => {
+        // Checkbox işaretliyse tercihi kaydet (iptal edilse bile)
+        if (autoUpdateEnabled) {
+            await saveAutoLocationUpdatePreference(true);
+            console.log('📍 Otomatik konum güncelleme tercihi kaydedildi (iptal edildi ama tercih saklandı)');
+        }
         setShowChangeModal(false);
     };
 
@@ -628,7 +646,8 @@ export const useAppLogic = () => {
                         prayerTimes: convertedPrayerTimes,
                     };
 
-                    await handleGPSComplete(result);
+                    // Otomatik GPS güncellemesi - yeni konum olarak kaydetme
+                    await handleGPSComplete(result, true);
                 } catch (error) {
                     console.error('❌ Otomatik GPS konumu uygulama hatası:', error);
                 }

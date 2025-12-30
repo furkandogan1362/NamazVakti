@@ -385,6 +385,26 @@ export const loadCalibrationPreference = async (): Promise<boolean> => {
     }
 };
 
+// GPS Konum otomatik güncelleme tercihi
+// Bu tercih aktifken GPS açıkken uygulamaya girildiğinde konum değişikliği sorulmadan otomatik güncellenir
+export const saveAutoLocationUpdatePreference = async (autoUpdate: boolean): Promise<void> => {
+    try {
+        await AsyncStorage.setItem('autoLocationUpdatePreference', JSON.stringify(autoUpdate));
+    } catch (error) {
+        console.error('Error saving auto location update preference:', error);
+    }
+};
+
+export const loadAutoLocationUpdatePreference = async (): Promise<boolean> => {
+    try {
+        const savedPreference = await AsyncStorage.getItem('autoLocationUpdatePreference');
+        return savedPreference ? JSON.parse(savedPreference) : false;
+    } catch (error) {
+        console.error('Error loading auto location update preference:', error);
+        return false;
+    }
+};
+
 // --- Cache Functions for Location Picker ---
 
 const CACHE_KEY_COUNTRIES = 'cache_countries_v1';

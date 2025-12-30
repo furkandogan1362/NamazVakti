@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Platform, PermissionsAndroid } from 'react-native';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { PermissionsAndroid, AppState, AppStateStatus } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
 import { DiyanetService, CityDetail } from '../api/apiDiyanet';
-import { loadGPSCityInfo, loadLocationMode, loadLocationData } from '../services/storageService';
+import { loadGPSCityInfo, loadLocationMode, loadLocationData, loadAutoLocationUpdatePreference } from '../services/storageService';
 import { useNetwork } from '../contexts/NetworkContext';
 
 export const useLocationChangeCheck = () => {
@@ -10,6 +10,7 @@ export const useLocationChangeCheck = () => {
     const [newLocation, setNewLocation] = useState<CityDetail | null>(null);
     const [isChecking, setIsChecking] = useState(false);
     const [shouldAutoApply, setShouldAutoApply] = useState(false);
+    const [isAutoUpdateEnabled, setIsAutoUpdateEnabled] = useState(false);
     const { isOnline } = useNetwork();
 
     const checkLocationChange = useCallback(async () => {
@@ -20,23 +21,21 @@ export const useLocationChangeCheck = () => {
         setIsChecking(true);
 
         try {
-            // 1. İzin kontrolü
-            let hasPermission = false;
-            if (Platform.OS === 'android') {
-                hasPermission = await PermissionsAndroid.check(
-                    PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-                );
-            } else {
-                const authStatus = await Geolocation.requestAuthorization('whenInUse');
-                hasPermission = authStatus === 'granted';
-            }
+            // Önce otomatik güncelleme tercihini kontrol et
+            const autoUpdatePreference = await loadAutoLocationUpdatePreference();
+            setIsAutoUpdateEnabled(autoUpdatePreference);
+
+            // 1. İzin kontrolü (sadece Android)
+            const hasPermission = await PermissionsAndroid.check(
+                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+            );
 
             if (!hasPermission) {
                 setIsChecking(false);
                 return;
             }
 
-            // 2. Mevcut konumu al
+            // 2. Mevcut konumu al - maximumAge: 0 ile her zaman taze konum
             Geolocation.getCurrentPosition(
                 async (position) => {
                     try {
@@ -111,13 +110,21 @@ export const useLocationChangeCheck = () => {
                             isDifferentByName,
                             isDifferent,
                             hasExistingLocation,
-                            willShowModal: hasExistingLocation && isDifferent,
+                            autoUpdatePreference,
+                            willShowModal: hasExistingLocation && isDifferent && !autoUpdatePreference,
                         });
 
                         if (hasExistingLocation && isDifferent) {
                             console.log('📍 GPS konum değişikliği tespit edildi:', `${currentDistrictName} -> ${cityDetail.name}`);
                             setNewLocation(cityDetail);
-                            setShowChangeModal(true);
+
+                            // Otomatik güncelleme aktifse modal gösterme, direkt uygula
+                            if (autoUpdatePreference) {
+                                console.log('📍 Otomatik güncelleme aktif - modal göstermeden uygulama yapılacak');
+                                setShouldAutoApply(true);
+                            } else {
+                                setShowChangeModal(true);
+                            }
                         } else if (!hasExistingLocation && locationMode === 'gps') {
                             // GPS modunda ama mevcut konum yok - yeni konumu otomatik kullan (modal gösterme)
                             console.log('📍 GPS modunda ilk konum tespit edildi:', cityDetail.name);
@@ -138,7 +145,7 @@ export const useLocationChangeCheck = () => {
                 {
                     enableHighAccuracy: true,
                     timeout: 15000,
-                    maximumAge: 10000,
+                    maximumAge: 0, // Her zaman taze konum al
                     showLocationDialog: false, // GPS kapalıysa sistem diyaloğu gösterme
                 },
             );
@@ -149,16 +156,45 @@ export const useLocationChangeCheck = () => {
         }
     }, [isOnline, isChecking]); // selectedLocation dependency removed as we use storage now
 
+    // AppState ref - uygulama ön plana geldiğinde kontrol için
+    const appState = useRef(AppState.currentState);
+    const lastCheckTime = useRef<number>(0);
+
     // Uygulama açıldığında bir kez kontrol et
     useEffect(() => {
         // Biraz gecikmeli başlat ki uygulama açılışını yavaşlatmasın
         const timer = setTimeout(() => {
             checkLocationChange();
-        }, 3000);
+            lastCheckTime.current = Date.now();
+        }, 1000);
 
         return () => clearTimeout(timer);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isOnline]); // isOnline değiştiğinde de tetiklensin (örn: internet gelince)
+
+    // AppState listener - uygulama ön plana geldiğinde kontrol et
+    useEffect(() => {
+        const handleAppStateChange = (nextAppState: AppStateStatus) => {
+            // Uygulama arka plandan ön plana geldiğinde
+            if (
+                appState.current.match(/inactive|background/) &&
+                nextAppState === 'active'
+            ) {
+                // Son kontrolden en az 10 saniye geçmişse kontrol et
+                const now = Date.now();
+                if (now - lastCheckTime.current > 10000) {
+                    console.log('📍 Uygulama ön plana geldi - konum kontrolü yapılıyor...');
+                    checkLocationChange();
+                    lastCheckTime.current = now;
+                }
+            }
+            appState.current = nextAppState;
+        };
+
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        return () => subscription.remove();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOnline]);
 
     return {
         showChangeModal,
@@ -167,5 +203,6 @@ export const useLocationChangeCheck = () => {
         checkLocationChange,
         shouldAutoApply,
         setShouldAutoApply,
+        isAutoUpdateEnabled,
     };
 };

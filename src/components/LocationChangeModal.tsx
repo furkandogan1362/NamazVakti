@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Modal, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import GlassView from './ui/GlassView';
 import { useTheme } from '../contexts/ThemeContext';
@@ -6,8 +6,8 @@ import { useTheme } from '../contexts/ThemeContext';
 interface LocationChangeModalProps {
     visible: boolean;
     newLocationName: string;
-    onConfirm: () => void;
-    onCancel: () => void;
+    onConfirm: (autoUpdateEnabled: boolean) => void;
+    onCancel: (autoUpdateEnabled: boolean) => void;
     isLoading?: boolean;
 }
 
@@ -20,13 +20,14 @@ const LocationChangeModal: React.FC<LocationChangeModalProps> = ({
 }) => {
     const { theme, isSmallScreen, screenWidth } = useTheme();
     const styles = createStyles(theme, isSmallScreen, screenWidth);
+    const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(false);
 
     return (
         <Modal
             animationType="fade"
             transparent={true}
             visible={visible}
-            onRequestClose={isLoading ? () => {} : onCancel}
+            onRequestClose={isLoading ? () => {} : () => onCancel(autoUpdateEnabled)}
         >
             <View style={styles.modalOverlay}>
                 <GlassView style={styles.modalContent} autoHeight={true} overlayOpacity={0.99}>
@@ -45,10 +46,24 @@ const LocationChangeModal: React.FC<LocationChangeModalProps> = ({
                             Yeni konumunuza göre namaz vakitlerini güncellememizi ister misiniz?
                         </Text>
 
+                        {/* Otomatik güncelleme checkbox'ı */}
+                        <TouchableOpacity
+                            style={styles.checkboxContainer}
+                            onPress={() => setAutoUpdateEnabled(!autoUpdateEnabled)}
+                            disabled={isLoading}
+                        >
+                            <View style={[styles.checkbox, autoUpdateEnabled && styles.checkboxChecked]}>
+                                {autoUpdateEnabled && <Text style={styles.checkmark}>✓</Text>}
+                            </View>
+                            <Text style={styles.checkboxLabel}>
+                                Bir daha gösterme ve her girişte otomatik olarak vakitleri getir
+                            </Text>
+                        </TouchableOpacity>
+
                         <View style={styles.buttonContainer}>
                             <TouchableOpacity
                                 style={[styles.cancelButton, isLoading && styles.disabledButton]}
-                                onPress={onCancel}
+                                onPress={() => onCancel(autoUpdateEnabled)}
                                 disabled={isLoading}
                             >
                                 <Text style={[styles.cancelButtonText, isLoading && styles.disabledButtonText]}>Hayır, Kalsın</Text>
@@ -56,7 +71,7 @@ const LocationChangeModal: React.FC<LocationChangeModalProps> = ({
 
                             <TouchableOpacity
                                 style={[styles.confirmButton, isLoading && styles.disabledButton]}
-                                onPress={onConfirm}
+                                onPress={() => onConfirm(autoUpdateEnabled)}
                                 disabled={isLoading}
                             >
                                 <Text style={styles.confirmButtonText}>
@@ -125,8 +140,42 @@ const createStyles = (theme: any, _isSmallScreen: boolean, _screenWidth: number)
             fontSize: 14,
             color: theme.colors.secondaryText,
             textAlign: 'center',
-            marginBottom: 24,
+            marginBottom: 16,
             lineHeight: 20,
+        },
+        checkboxContainer: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            backgroundColor: theme.type === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+            borderRadius: 10,
+            marginBottom: 20,
+            width: '100%',
+        },
+        checkbox: {
+            width: 22,
+            height: 22,
+            borderRadius: 6,
+            borderWidth: 2,
+            borderColor: theme.colors.accent,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: 10,
+        },
+        checkboxChecked: {
+            backgroundColor: theme.colors.accent,
+        },
+        checkmark: {
+            color: '#FFFFFF',
+            fontSize: 14,
+            fontWeight: 'bold',
+        },
+        checkboxLabel: {
+            flex: 1,
+            fontSize: 13,
+            color: theme.colors.secondaryText,
+            lineHeight: 18,
         },
         buttonContainer: {
             flexDirection: 'row',

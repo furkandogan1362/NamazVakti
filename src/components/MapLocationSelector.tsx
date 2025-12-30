@@ -20,11 +20,10 @@ import {
     Modal,
     TouchableOpacity,
     ActivityIndicator,
-    Platform,
     PermissionsAndroid,
-    Linking,
-    AppState,
-    AppStateStatus,
+    Animated as RNAnimated,
+    StyleSheet,
+    Dimensions,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import Geolocation from 'react-native-geolocation-service';
@@ -33,6 +32,206 @@ import { useTheme } from '../contexts/ThemeContext';
 import { MapLocationService, CompleteLocationData } from '../api/apiDiyanet';
 import { createStyles } from '../styles/MapLocationSelectorStyles';
 import GlassView from './ui/GlassView';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+// Shimmer efektli skeleton elemanı
+const ShimmerElement: React.FC<{ style: any; theme: any }> = ({ style, theme }) => {
+    const shimmerAnim = useRef(new RNAnimated.Value(0)).current;
+
+    useEffect(() => {
+        const animation = RNAnimated.loop(
+            RNAnimated.timing(shimmerAnim, {
+                toValue: 1,
+                duration: 1500,
+                useNativeDriver: true,
+            })
+        );
+        animation.start();
+        return () => animation.stop();
+    }, [shimmerAnim]);
+
+    const translateX = shimmerAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [-SCREEN_WIDTH * 2, SCREEN_WIDTH * 2],
+    });
+
+    return (
+        <View style={[style, { overflow: 'hidden' }]}>
+            <RNAnimated.View
+                style={{
+                    ...StyleSheet.absoluteFillObject,
+                    backgroundColor: theme.type === 'dark'
+                        ? 'rgba(255,255,255,0.08)'
+                        : 'rgba(255,255,255,0.7)',
+                    transform: [{ translateX }],
+                }}
+            />
+        </View>
+    );
+};
+
+// Shimmer Skeleton Bileşeni
+const MapSkeleton: React.FC<{ theme: any }> = ({ theme }) => {
+    const skeletonColor = theme.type === 'dark' ? '#3f3f46' : '#d4d4d8';
+    const cardBg = theme.type === 'dark' ? '#27272a' : '#ffffff';
+
+    const skeletonStyles = StyleSheet.create({
+        container: {
+            flex: 1,
+            backgroundColor: theme.type === 'dark' ? '#1a1a1d' : '#f5f5f5',
+        },
+        mapArea: {
+            flex: 1,
+            backgroundColor: theme.type === 'dark' ? '#27272a' : '#e5e5e5',
+        },
+        // Header - gerçek konumda
+        header: {
+            position: 'absolute',
+            top: 50,
+            left: 16,
+            right: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+        },
+        headerBack: {
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: skeletonColor,
+        },
+        headerTitle: {
+            width: 120,
+            height: 20,
+            borderRadius: 10,
+            backgroundColor: skeletonColor,
+        },
+        // Merkez pin - gerçek konumda
+        pinContainer: {
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            marginLeft: -24,
+            marginTop: -48,
+            alignItems: 'center',
+        },
+        pin: {
+            width: 48,
+            height: 48,
+            backgroundColor: skeletonColor,
+            borderRadius: 24,
+        },
+        pinShadow: {
+            width: 20,
+            height: 6,
+            borderRadius: 3,
+            backgroundColor: skeletonColor,
+            marginTop: 4,
+            opacity: 0.5,
+        },
+        // My location button - gerçek konumda
+        myLocationButton: {
+            position: 'absolute',
+            right: 16,
+            bottom: 220,
+            width: 48,
+            height: 48,
+            borderRadius: 24,
+            backgroundColor: skeletonColor,
+        },
+        // Bottom card - gerçek konumda
+        bottomCard: {
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            backgroundColor: cardBg,
+            borderTopLeftRadius: 24,
+            borderTopRightRadius: 24,
+            padding: 20,
+            paddingBottom: 30,
+            borderWidth: 1,
+            borderColor: theme.colors.cardBorder,
+        },
+        addressRow: {
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 16,
+        },
+        addressIcon: {
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: skeletonColor,
+            marginRight: 12,
+        },
+        addressLines: {
+            flex: 1,
+        },
+        addressLine1: {
+            width: '35%',
+            height: 12,
+            borderRadius: 6,
+            backgroundColor: skeletonColor,
+            marginBottom: 8,
+        },
+        addressLine2: {
+            width: '70%',
+            height: 16,
+            borderRadius: 8,
+            backgroundColor: skeletonColor,
+        },
+        coordsLine: {
+            width: '50%',
+            height: 14,
+            borderRadius: 7,
+            backgroundColor: skeletonColor,
+            alignSelf: 'center',
+            marginBottom: 16,
+        },
+        button: {
+            height: 52,
+            borderRadius: 16,
+            backgroundColor: skeletonColor,
+        },
+    });
+
+    return (
+        <View style={skeletonStyles.container}>
+            {/* Harita alanı (düz arka plan) */}
+            <View style={skeletonStyles.mapArea} />
+
+            {/* Header Skeleton */}
+            <View style={skeletonStyles.header}>
+                <ShimmerElement style={skeletonStyles.headerBack} theme={theme} />
+                <ShimmerElement style={skeletonStyles.headerTitle} theme={theme} />
+            </View>
+
+            {/* Pin Skeleton */}
+            <View style={skeletonStyles.pinContainer}>
+                <ShimmerElement style={skeletonStyles.pin} theme={theme} />
+                <View style={skeletonStyles.pinShadow} />
+            </View>
+
+            {/* My Location Button Skeleton */}
+            <ShimmerElement style={skeletonStyles.myLocationButton} theme={theme} />
+
+            {/* Bottom Card Skeleton */}
+            <View style={skeletonStyles.bottomCard}>
+                <View style={skeletonStyles.addressRow}>
+                    <ShimmerElement style={skeletonStyles.addressIcon} theme={theme} />
+                    <View style={skeletonStyles.addressLines}>
+                        <ShimmerElement style={skeletonStyles.addressLine1} theme={theme} />
+                        <ShimmerElement style={skeletonStyles.addressLine2} theme={theme} />
+                    </View>
+                </View>
+                <ShimmerElement style={skeletonStyles.coordsLine} theme={theme} />
+                <ShimmerElement style={skeletonStyles.button} theme={theme} />
+            </View>
+        </View>
+    );
+};
 
 // Sonuç tipi
 export interface MapLocationResult {
@@ -141,20 +340,20 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
 
     // State
     const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('checking');
+    const [showPermissionModal, setShowPermissionModal] = useState(false); // Özel izin modalı
     const [currentCoords, setCurrentCoords] = useState<{ lat: number; lon: number } | null>(null);
     const [locationData, setLocationData] = useState<CompleteLocationData | null>(null);
     const [isLoadingAddress, setIsLoadingAddress] = useState(false);
     const [isMoving, setIsMoving] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string>('');
-    const [permissionAskedOnce, setPermissionAskedOnce] = useState(false);
-    const [waitingForSettings, setWaitingForSettings] = useState(false);
     const [mapInitialized, setMapInitialized] = useState(false);
+    const [showToast, setShowToast] = useState(false);
 
     // Refs
     const webViewRef = useRef<WebView>(null);
-    const appState = useRef(AppState.currentState);
     const initialCoordsRef = useRef<{ lat: number; lon: number } | null>(null);
+    const toastOpacity = useRef(new RNAnimated.Value(0)).current;
 
     // Varsayılan konum (Türkiye merkezi - Ankara)
     const defaultCoords = { lat: 39.9334, lon: 32.8597 };
@@ -166,6 +365,27 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [mapInitialized]);
 
+    // Toast gösterme fonksiyonu
+    const showPermissionToast = () => {
+        setShowToast(true);
+        RNAnimated.timing(toastOpacity, {
+            toValue: 1,
+            duration: 300,
+            useNativeDriver: true,
+        }).start(() => {
+            // 3 saniye sonra kapat
+            setTimeout(() => {
+                RNAnimated.timing(toastOpacity, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                }).start(() => {
+                    setShowToast(false);
+                });
+            }, 3000);
+        });
+    };
+
     // İzin kontrolü ve akış başlatma
     useEffect(() => {
         if (visible) {
@@ -174,89 +394,61 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible]);
 
-    // Ayarlardan dönüş kontrolü
-    useEffect(() => {
-        const handleAppStateChange = async (nextAppState: AppStateStatus) => {
-            if (
-                appState.current.match(/inactive|background/) &&
-                nextAppState === 'active' &&
-                waitingForSettings &&
-                visible
-            ) {
-                setWaitingForSettings(false);
-                checkPermissionAndStart(true);
-            }
-            appState.current = nextAppState;
-        };
-
-        const subscription = AppState.addEventListener('change', handleAppStateChange);
-        return () => subscription.remove();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [waitingForSettings, visible]);
-
-    // İzin kontrolü
-    const checkPermissionAndStart = async (fromSettings: boolean = false) => {
+    // İzin kontrolü (sadece Android)
+    const checkPermissionAndStart = async () => {
         setPermissionStatus('checking');
         setErrorMessage('');
 
-        if (Platform.OS === 'android') {
-            const hasPermission = await PermissionsAndroid.check(
-                PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-            );
+        const hasPermission = await PermissionsAndroid.check(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        );
 
-            if (!hasPermission) {
-                if (fromSettings || !permissionAskedOnce) {
-                    if (!fromSettings) {
-                        setPermissionAskedOnce(true);
-                    }
-                    setPermissionStatus('requesting');
-
-                    const granted = await PermissionsAndroid.request(
-                        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-                        {
-                            title: 'Konum İzni',
-                            message: 'Haritada konumunuzu gösterebilmek için konum erişimine ihtiyacımız var.',
-                            buttonPositive: 'İzin Ver',
-                            buttonNegative: 'İptal',
-                        }
-                    );
-
-                    if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-                        setPermissionStatus('granted');
-                        getCurrentLocation();
-                    } else if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-                        setPermissionStatus('blocked');
-                    } else {
-                        if (fromSettings) {
-                            setPermissionStatus('blocked');
-                        } else {
-                            setPermissionStatus('denied');
-                        }
-                    }
-                } else {
-                    setPermissionStatus('blocked');
-                }
-            } else {
-                setPermissionStatus('granted');
-                getCurrentLocation();
-            }
+        if (!hasPermission) {
+            // İzin yok - modern modalı göster
+            setShowPermissionModal(true);
+            setPermissionStatus('denied');
         } else {
-            // iOS için
-            try {
-                const authStatus = await Geolocation.requestAuthorization('whenInUse');
-                if (authStatus === 'granted') {
-                    setPermissionStatus('granted');
-                    getCurrentLocation();
-                } else if (authStatus === 'denied') {
-                    setPermissionStatus('blocked');
-                } else {
-                    setPermissionStatus('denied');
-                }
-            } catch (err) {
-                console.error('iOS permission error:', err);
-                setPermissionStatus('denied');
-            }
+            setPermissionStatus('granted');
+            getCurrentLocation();
         }
+    };
+
+    // Sistem izin dialogunu aç (kullanıcı modalda "İzin Ver" dediğinde)
+    const requestSystemPermission = async () => {
+        setShowPermissionModal(false);
+        setPermissionStatus('requesting');
+
+        // Sadece izin iste - rationale parametresi olmadan
+        // Böylece bizim custom modalımızı görür, sonra sistem pop-up'ı çıkar
+        const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        );
+
+        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            setPermissionStatus('granted');
+            getCurrentLocation();
+        } else {
+            // İzin reddedildi - haritayı varsayılan konumla aç ve toast göster
+            openMapWithDefaultLocation();
+        }
+    };
+
+    // Modal'dan "Vazgeç" butonuna basıldığında
+    const handleSkipPermission = () => {
+        setShowPermissionModal(false);
+        openMapWithDefaultLocation();
+    };
+
+    // Varsayılan konumla haritayı aç (izin reddedildiğinde)
+    const openMapWithDefaultLocation = () => {
+        setPermissionStatus('granted'); // Haritayı göstermek için granted yap
+        if (!initialCoordsRef.current) {
+            initialCoordsRef.current = defaultCoords;
+            setMapInitialized(true);
+        }
+        setCurrentCoords(defaultCoords);
+        // Toast göster
+        showPermissionToast();
     };
 
     // Mevcut konumu al
@@ -271,14 +463,15 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
                 }
                 setCurrentCoords({ lat: latitude, lon: longitude });
             },
-            (error) => {
-                console.error('GPS Error:', error);
-                // Hata durumunda varsayılan bölgeyi kullan
+            (_error) => {
+                // GPS kapalı veya erişilemez - varsayılan konumla haritayı aç ve toast göster
                 if (!initialCoordsRef.current) {
                     initialCoordsRef.current = defaultCoords;
                     setMapInitialized(true);
                 }
                 setCurrentCoords(defaultCoords);
+                // Toast göster (GPS kapalı veya erişilemez)
+                showPermissionToast();
             },
             {
                 enableHighAccuracy: true,
@@ -357,16 +550,6 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
         );
     };
 
-    // Ayarları aç
-    const openSettings = () => {
-        setWaitingForSettings(true);
-        if (Platform.OS === 'ios') {
-            Linking.openURL('app-settings:');
-        } else {
-            Linking.openSettings();
-        }
-    };
-
     // Konumu onayla
     const handleConfirm = async () => {
         if (!locationData || !currentCoords) {
@@ -405,85 +588,167 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
         onClose();
     };
 
-    // İzin ekranı render
-    const renderPermissionScreen = () => {
-        const isBlocked = permissionStatus === 'blocked';
-        const isDenied = permissionStatus === 'denied';
-        const isRequesting = permissionStatus === 'requesting' || permissionStatus === 'checking';
+    // İzin modal render - Modern Overlay Modal
+    const renderPermissionModal = () => {
+        if (!showPermissionModal) {
+            return null;
+        }
 
         return (
-            <View style={styles.permissionContainer}>
-                <View style={styles.permissionIconContainer}>
-                    {isRequesting ? (
-                        <ActivityIndicator size="large" color="#FFFFFF" />
-                    ) : (
-                        <MaterialIcons
-                            name={isBlocked ? 'location-off' : 'location-on'}
-                            size={50}
-                            color="#FFFFFF"
-                        />
-                    )}
-                </View>
+            <View style={permissionModalStyles.overlay}>
+                <View style={permissionModalStyles.backdrop} />
+                <GlassView style={permissionModalStyles.modal} autoHeight overlayOpacity={0.99}>
+                    <View style={permissionModalStyles.content}>
+                        {/* İkon */}
+                        <View style={[
+                            permissionModalStyles.iconContainer,
+                            { backgroundColor: theme.colors.accent + '20' },
+                        ]}>
+                            <MaterialIcons
+                                name="location-on"
+                                size={40}
+                                color={theme.colors.accent}
+                            />
+                        </View>
 
-                <Text style={styles.permissionTitle}>
-                    {isRequesting
-                        ? 'Konum İzni Kontrol Ediliyor'
-                        : isBlocked
-                        ? 'Konum İzni Engellendi'
-                        : 'Konum İzni Gerekli'}
-                </Text>
+                        {/* Başlık */}
+                        <Text style={permissionModalStyles.title}>Konum İzni Gerekli</Text>
 
-                <Text style={styles.permissionMessage}>
-                    {isRequesting
-                        ? 'Konum izni durumu kontrol ediliyor...'
-                        : isBlocked
-                        ? 'Haritayı kullanabilmek için ayarlardan konum iznini etkinleştirmeniz gerekiyor.'
-                        : 'Haritada konumunuzu gösterebilmemiz için konum iznine ihtiyacımız var.'}
-                </Text>
+                        {/* Açıklama */}
+                        <Text style={permissionModalStyles.message}>
+                            Haritada konumunuzu gösterebilmemiz için konum erişim izni vermeniz gerekmektedir.
+                        </Text>
 
-                <View style={styles.permissionButtonContainer}>
-                    {isDenied && (
-                        <TouchableOpacity
-                            style={styles.permissionButton}
-                            onPress={() => checkPermissionAndStart(false)}
-                        >
-                            <MaterialIcons name="refresh" size={20} color="#FFFFFF" />
-                            <Text style={styles.permissionButtonText}>Tekrar Dene</Text>
-                        </TouchableOpacity>
-                    )}
+                        {/* Bilgi Kutusu */}
+                        <View style={permissionModalStyles.infoBox}>
+                            <MaterialIcons name="info-outline" size={18} color={theme.colors.secondaryText} />
+                            <Text style={permissionModalStyles.infoText}>
+                                İzin vermezseniz de haritayı kullanabilirsiniz, ancak konumunuz otomatik tespit edilemez.
+                            </Text>
+                        </View>
 
-                    {isBlocked && (
-                        <TouchableOpacity
-                            style={styles.settingsButton}
-                            onPress={openSettings}
-                        >
-                            <MaterialIcons name="settings" size={20} color="#FFFFFF" />
-                            <Text style={styles.settingsButtonText}>Ayarları Aç</Text>
-                        </TouchableOpacity>
-                    )}
+                        {/* Butonlar */}
+                        <View style={permissionModalStyles.buttonContainer}>
+                            <TouchableOpacity
+                                style={permissionModalStyles.secondaryButton}
+                                onPress={handleSkipPermission}
+                            >
+                                <Text style={permissionModalStyles.secondaryButtonText}>Atla</Text>
+                            </TouchableOpacity>
 
-                    {!isRequesting && (
-                        <TouchableOpacity style={styles.cancelButton} onPress={handleClose}>
-                            <Text style={styles.cancelButtonText}>Vazgeç</Text>
-                        </TouchableOpacity>
-                    )}
-                </View>
+                            <TouchableOpacity
+                                style={permissionModalStyles.primaryButton}
+                                onPress={requestSystemPermission}
+                            >
+                                <MaterialIcons name="check" size={20} color="#FFFFFF" />
+                                <Text style={permissionModalStyles.primaryButtonText}>İzin Ver</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </GlassView>
             </View>
         );
     };
 
+    // İzin modal stilleri
+    const permissionModalStyles = StyleSheet.create({
+        overlay: {
+            ...StyleSheet.absoluteFillObject,
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 9999,
+            elevation: 9999,
+        },
+        backdrop: {
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+        },
+        modal: {
+            width: '90%',
+            maxWidth: 380,
+            borderRadius: 24,
+        },
+        content: {
+            padding: 24,
+            alignItems: 'center',
+        },
+        iconContainer: {
+            width: 80,
+            height: 80,
+            borderRadius: 40,
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginBottom: 20,
+        },
+        title: {
+            fontSize: 22,
+            fontWeight: 'bold',
+            color: theme.colors.text,
+            marginBottom: 12,
+            textAlign: 'center',
+        },
+        message: {
+            fontSize: 15,
+            color: theme.colors.secondaryText,
+            textAlign: 'center',
+            lineHeight: 22,
+            marginBottom: 16,
+        },
+        infoBox: {
+            flexDirection: 'row',
+            alignItems: 'flex-start',
+            backgroundColor: theme.type === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+            borderRadius: 12,
+            padding: 12,
+            marginBottom: 24,
+            gap: 10,
+        },
+        infoText: {
+            flex: 1,
+            fontSize: 13,
+            color: theme.colors.secondaryText,
+            lineHeight: 18,
+        },
+        buttonContainer: {
+            flexDirection: 'row',
+            gap: 12,
+            width: '100%',
+        },
+        secondaryButton: {
+            flex: 1,
+            paddingVertical: 14,
+            borderRadius: 14,
+            backgroundColor: theme.type === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
+            alignItems: 'center',
+            justifyContent: 'center',
+        },
+        secondaryButtonText: {
+            fontSize: 16,
+            fontWeight: '600',
+            color: theme.colors.text,
+        },
+        primaryButton: {
+            flex: 1,
+            flexDirection: 'row',
+            paddingVertical: 14,
+            borderRadius: 14,
+            backgroundColor: theme.colors.accent,
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+        },
+        primaryButtonText: {
+            fontSize: 16,
+            fontWeight: 'bold',
+            color: '#FFFFFF',
+        },
+    });
+
     // Harita ekranı render
     const renderMapScreen = () => {
-        // Harita henüz hazır değilse loading göster
+        // Harita henüz hazır değilse skeleton göster
         if (!mapInitialized) {
-            return (
-                <View style={styles.container}>
-                    <View style={styles.loadingOverlay}>
-                        <ActivityIndicator size="large" color={theme.colors.accent} />
-                        <Text style={styles.loadingText}>Konum alınıyor...</Text>
-                    </View>
-                </View>
-            );
+            return <MapSkeleton theme={theme} />;
         }
 
         return (
@@ -499,10 +764,7 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
                         domStorageEnabled={true}
                         startInLoadingState={true}
                         renderLoading={() => (
-                            <View style={styles.loadingOverlay}>
-                                <ActivityIndicator size="large" color={theme.colors.accent} />
-                                <Text style={styles.loadingText}>Harita yükleniyor...</Text>
-                            </View>
+                            <MapSkeleton theme={theme} />
                         )}
                         scrollEnabled={true}
                         bounces={false}
@@ -534,16 +796,33 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
                         <Text style={styles.headerTitle}>Konum Seç</Text>
                         <View style={styles.placeholder} />
                     </View>
+                </View>
 
-                    {/* Konumuma Git */}
+                {/* Toast + Alt Kart Wrapper - Toast her zaman bottom card'ın hemen üstünde */}
+                <View style={styles.bottomWrapper}>
+                    {/* Konumuma Git - bottomWrapper'ın hemen üstünde */}
                     <TouchableOpacity style={styles.myLocationButton} onPress={handleMyLocation}>
                         <MaterialIcons name="my-location" size={24} color={theme.colors.accent} />
                     </TouchableOpacity>
-                </View>
 
-                {/* Alt Kart */}
-                <GlassView style={styles.bottomCard} autoHeight={true} overlayOpacity={0.99}>
-                    <View style={styles.bottomCardInner}>
+                    {/* Toast Mesajı - Bottom card'a teğet */}
+                    {showToast && (
+                        <RNAnimated.View
+                            style={[styles.toastContainerInline, { opacity: toastOpacity }]}
+                            pointerEvents="none"
+                        >
+                            <View style={styles.toastContent}>
+                                <MaterialIcons name="location-off" size={20} color={theme.colors.secondaryText} />
+                                <Text style={styles.toastText}>
+                                    Konumunuz açık olmadığı için konumunuzu tespit edemedik.
+                                </Text>
+                            </View>
+                        </RNAnimated.View>
+                    )}
+
+                    {/* Alt Kart */}
+                    <GlassView style={styles.bottomCard} autoHeight={true} overlayOpacity={0.99}>
+                        <View style={styles.bottomCardInner}>
                         {/* Adres Bilgisi */}
                         <View style={styles.addressContainer}>
                             <View style={styles.addressIconContainer}>
@@ -602,6 +881,7 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
                         </TouchableOpacity>
                     </View>
                 </GlassView>
+                </View>
 
                 {/* Full Screen Loading */}
                 {isSubmitting && (
@@ -616,12 +896,16 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
         );
     };
 
-    // İzin durumuna göre render
+    // İzin durumuna göre render - artık her zaman skeleton veya map göster
     const renderContent = () => {
-        if (permissionStatus === 'granted') {
-            return renderMapScreen();
+        const isLoading = permissionStatus === 'checking' || permissionStatus === 'requesting';
+
+        // Skeleton göster: henüz izin kontrol ediliyorken veya harita hazır değilken
+        if (isLoading || !mapInitialized) {
+            return <MapSkeleton theme={theme} />;
         }
-        return renderPermissionScreen();
+
+        return renderMapScreen();
     };
 
     return (
@@ -632,7 +916,12 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
             onRequestClose={handleClose}
             statusBarTranslucent={true}
         >
-            <View style={styles.modalOverlay}>{renderContent()}</View>
+            <View style={styles.modalOverlay}>
+                {renderContent()}
+
+                {/* İzin Modalı - Overlay olarak */}
+                {renderPermissionModal()}
+            </View>
         </Modal>
     );
 };
