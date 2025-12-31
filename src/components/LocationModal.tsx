@@ -7,9 +7,10 @@ import { useTheme } from '../contexts/ThemeContext';
 interface LocationModalProps {
     visible: boolean;
     onClose: () => void;
+    onSameLocation?: (locationName: string) => void;
 }
 
-const LocationModal: React.FC<LocationModalProps> = ({ visible, onClose }) => {
+const LocationModal: React.FC<LocationModalProps> = ({ visible, onClose, onSameLocation }) => {
     const { theme, isSmallScreen, screenWidth } = useTheme();
     const styles = createStyles(theme, isSmallScreen, screenWidth);
 
@@ -37,7 +38,7 @@ const LocationModal: React.FC<LocationModalProps> = ({ visible, onClose }) => {
                             Namaz vakitlerini doğru görüntülemek için lütfen konumunuzu seçin.
                         </Text>
 
-                        <LocationPicker onClose={onClose} />
+                        <LocationPicker onClose={onClose} onSameLocation={onSameLocation} />
                     </View>
                 </GlassView>
             </View>

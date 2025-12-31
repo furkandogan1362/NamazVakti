@@ -12,6 +12,7 @@ interface SavedLocationsModalProps {
     onClose: () => void;
     onAddLocation: () => void;
     currentLocation?: {
+        id?: number;        // GPS/Harita konumu ID'si
         country?: string;
         city?: string;
         district?: string;
@@ -55,6 +56,13 @@ const SavedLocationsModal: React.FC<SavedLocationsModalProps> = ({
     }, [visible, savedLocations, currentLocation]);
 
     const isLocationSelected = (loc: SelectedLocation) => {
+        // 1. Önce ID bazlı karşılaştırma (en güvenilir)
+        // GPS/Harita modunda currentLocation.id varsa ve loc.district.id ile eşleşiyorsa
+        if (currentLocation?.id && loc.district?.id && currentLocation.id === loc.district.id) {
+            return true;
+        }
+
+        // 2. İsim bazlı karşılaştırma (fallback)
         // Use passed currentLocation prop if available, otherwise fallback to context
         const targetCity = currentLocation?.city || selectedLocation.city?.name;
         const targetDistrict = currentLocation?.district || selectedLocation.district?.name;

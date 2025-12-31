@@ -28,6 +28,7 @@ interface PrayerTimesDisplayProps {
         country: string;
         city: string;
         region: string;
+        coords?: { lat: number; lon: number }; // Koordinat bazlı timezone için
     };
     onWeeklyPress?: () => void;
     onMonthlyPress?: () => void;

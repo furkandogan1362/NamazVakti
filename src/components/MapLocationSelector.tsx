@@ -910,7 +910,7 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
 
     return (
         <Modal
-            animationType="slide"
+            animationType="fade"
             transparent={false}
             visible={visible}
             onRequestClose={handleClose}

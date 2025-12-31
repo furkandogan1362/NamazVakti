@@ -30,7 +30,7 @@ import Geolocation from 'react-native-geolocation-service';
 import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import { useTheme } from '../contexts/ThemeContext';
 import { DiyanetService, CityDetail, PrayerTimeData } from '../api/apiDiyanet';
-import { loadGPSCityInfo, loadGPSPrayerTimes, loadLastLocationId, loadPrayerTimes } from '../services/storageService';
+import { loadGPSCityInfo, loadLastLocationId } from '../services/storageService';
 import GlassView from './ui/GlassView';
 import { PrayerTime } from '../types/types';
 
@@ -38,9 +38,14 @@ import { PrayerTime } from '../types/types';
 export interface GPSLocationResult {
     success: boolean;
     cancelled?: boolean;
+    sameLocation?: boolean; // Aynı konum mu?
     cityDetail?: CityDetail;
     prayerTimes?: PrayerTime[];
     error?: string;
+    locationData?: {
+        latitude: number;
+        longitude: number;
+    };
 }
 
 interface GPSLocationServiceProps {
@@ -49,7 +54,7 @@ interface GPSLocationServiceProps {
     onSkip: () => void;
 }
 
-type PermissionStatus = 'checking' | 'requesting' | 'denied' | 'blocked' | 'loading_location' | 'loading_data' | 'checking_cache' | 'same_location' | 'error' | 'success';
+type PermissionStatus = 'checking' | 'requesting' | 'denied' | 'blocked' | 'loading_location' | 'loading_data' | 'checking_cache' | 'error' | 'success';
 
 const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
     visible,
@@ -266,50 +271,47 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                 const cachedGPSCityInfo = await loadGPSCityInfo();
                 const cachedManualLocationId = await loadLastLocationId();
 
+                console.log('🔍 GPSLocationService cache kontrolü:', {
+                    cachedGPSCityInfo,
+                    cachedManualLocationId,
+                    newCityDetailId: cityDetail.id,
+                    newCityDetailName: cityDetail.name,
+                    gpsIdMatch: cachedGPSCityInfo ? cachedGPSCityInfo.id === cityDetail.id : 'no cache',
+                    manualIdMatch: cachedManualLocationId ? cachedManualLocationId === Number(cityDetail.id) : 'no cache',
+                });
+
                 // GPS cache ile karşılaştır
                 if (cachedGPSCityInfo && cachedGPSCityInfo.id === cityDetail.id) {
-                    console.log('📍 Aynı GPS konumu tespit edildi, cache kullanılıyor:', cityDetail.name);
+                    console.log('📍 Aynı GPS konumu tespit edildi, modal gösterilecek:', cityDetail.name);
 
-                    // Cache'deki namaz vakitlerini al
-                    const cachedPrayerTimes = await loadGPSPrayerTimes();
-
-                    if (cachedPrayerTimes && cachedPrayerTimes.length > 0) {
-                        setStatus('same_location');
-
-                        // Kısa bir süre bekle, sonra mevcut verilerle tamamla
-                        setTimeout(() => {
-                            onComplete({
-                                success: true,
-                                cityDetail,
-                                prayerTimes: cachedPrayerTimes,
-                            });
-                        }, 1500);
-                        return;
-                    }
-                    // Cache boşsa devam et ve API'den çek
+                    // Aynı konum - hemen sameLocation flag'i ile tamamla
+                    onComplete({
+                        success: false,
+                        sameLocation: true,
+                        cityDetail,
+                        locationData: {
+                            latitude: coords.latitude,
+                            longitude: coords.longitude,
+                        },
+                    });
+                    return;
                 }
 
                 // Manuel cache ile karşılaştır (GPS -> Manuel geçişi)
                 if (cachedManualLocationId && cachedManualLocationId === Number(cityDetail.id)) {
-                    console.log('📍 Manuel konum ile aynı GPS konumu tespit edildi, cache kullanılıyor:', cityDetail.name);
+                    console.log('📍 Manuel konum ile aynı GPS konumu tespit edildi, modal gösterilecek:', cityDetail.name);
 
-                    // Manuel cache'deki namaz vakitlerini al
-                    const cachedManualPrayerTimes = await loadPrayerTimes();
-
-                    if (cachedManualPrayerTimes && cachedManualPrayerTimes.length > 0) {
-                        setStatus('same_location');
-
-                        // Kısa bir süre bekle, sonra mevcut verilerle tamamla
-                        setTimeout(() => {
-                            onComplete({
-                                success: true,
-                                cityDetail,
-                                prayerTimes: cachedManualPrayerTimes,
-                            });
-                        }, 1500);
-                        return;
-                    }
-                    // Cache boşsa devam et ve API'den çek
+                    // Aynı konum - hemen sameLocation flag'i ile tamamla
+                    onComplete({
+                        success: false,
+                        sameLocation: true,
+                        cityDetail,
+                        locationData: {
+                            latitude: coords.latitude,
+                            longitude: coords.longitude,
+                        },
+                    });
+                    return;
                 }
 
                 // 4. Namaz vakitlerini al (farklı konum veya cache boş)
@@ -327,6 +329,10 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                         success: true,
                         cityDetail,
                         prayerTimes: convertedPrayerTimes,
+                        locationData: {
+                            latitude: coords.latitude,
+                            longitude: coords.longitude,
+                        },
                     });
                 }, 1500);
             } else {
@@ -409,7 +415,6 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
             case 'checking_cache':
                 return <MaterialIcons name="cloud-download" size={60} color="#FFFFFF" />;
             case 'success':
-            case 'same_location':
                 return <MaterialIcons name="check-circle" size={60} color="#4ADE80" />;
             case 'denied':
             case 'blocked':
@@ -433,8 +438,6 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                 return 'Namaz Vakitleri Yükleniyor';
             case 'checking_cache':
                 return 'Konum Kontrol Ediliyor';
-            case 'same_location':
-                return 'Aynı Konumdasınız!';
             case 'success':
                 return 'Konum Belirlendi!';
             case 'denied':
@@ -461,8 +464,6 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                 return 'Konumunuza göre namaz vakitleri getiriliyor...';
             case 'checking_cache':
                 return 'Mevcut konum kontrol ediliyor...';
-            case 'same_location':
-                return locationName ? `📍 ${locationName}\n\nZaten bu konumdasınız, mevcut veriler kullanılıyor.` : 'Zaten bu konumdasınız!';
             case 'success':
                 return locationName ? `📍 ${locationName}` : 'Konum başarıyla belirlendi!';
             case 'denied':

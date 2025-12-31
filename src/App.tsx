@@ -47,6 +47,7 @@ const AppContent: React.FC = () => {
         activePrayerTime,
         showChangeModal,
         newLocation,
+        newLocationFullAddress,
         toggleTheme,
         setShowWidgetPermissions,
         setShowQiblaCompass,
@@ -68,7 +69,18 @@ const AppContent: React.FC = () => {
         handleConfirmLocationChange,
         handleCancelLocationChange,
         setShowLocationMethodModal,
+        // Aynı konum modalı
+        showSameLocationModal,
+        sameLocationName,
+        setShowSameLocationModal,
+        setSameLocationName,
     } = useAppLogic();
+
+    // Manuel konum seçiminde aynı konum seçildiğinde
+    const handleShowSameLocation = (locationName: string) => {
+        setSameLocationName(locationName);
+        setShowSameLocationModal(true);
+    };
 
     const styles = createAppStyles(theme, isSmallScreen, screenWidth);
 
@@ -107,6 +119,7 @@ const AppContent: React.FC = () => {
                     country: gpsLocationInfo.country,
                     city: gpsLocationInfo.city,
                     region: gpsLocationInfo.name,
+                    coords: gpsLocationInfo.coords, // Koordinat bazlı timezone için
                 };
             } else if (hasFullLocation) {
                 displayLocation = {
@@ -119,6 +132,7 @@ const AppContent: React.FC = () => {
                     country: gpsLocationInfo.country,
                     city: gpsLocationInfo.city,
                     region: gpsLocationInfo.name,
+                    coords: gpsLocationInfo.coords, // Koordinat bazlı timezone için
                 };
             } else {
                 displayLocation = previousLocation!;
@@ -176,6 +190,7 @@ const AppContent: React.FC = () => {
                         isSavedLocationsModalOpen={isSavedLocationsModalOpen}
                         setIsSavedLocationsModalOpen={setIsSavedLocationsModalOpen}
                         currentLocation={isGPSMode && gpsLocationInfo ? {
+                            id: parseInt(gpsLocationInfo.id, 10),
                             country: gpsLocationInfo.country,
                             city: gpsLocationInfo.city,
                             district: gpsLocationInfo.name,
@@ -203,6 +218,7 @@ const AppContent: React.FC = () => {
                         setShowQiblaCompass={setShowQiblaCompass}
                         showChangeModal={showChangeModal}
                         newLocation={newLocation}
+                        newLocationFullAddress={newLocationFullAddress}
                         onConfirmLocationChange={handleConfirmLocationChange}
                         onCancelLocationChange={handleCancelLocationChange}
                         isChangingLocation={isChangingLocation}
@@ -210,6 +226,10 @@ const AppContent: React.FC = () => {
                         setShowWidgetPermissions={setShowWidgetPermissions}
                         isSmallScreen={isSmallScreen}
                         screenWidth={screenWidth}
+                        showSameLocationModal={showSameLocationModal}
+                        sameLocationName={sameLocationName}
+                        onCloseSameLocationModal={() => setShowSameLocationModal(false)}
+                        onShowSameLocation={handleShowSameLocation}
                     />
                 </ScrollView>
             </Animated.View>

@@ -209,7 +209,6 @@ export const updateWidget = async (
             ? await getTimezoneForLocation(locationDetail)
             : Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-        console.log('📱 Widget güncelleniyor (final):', { locationName, timezoneId });
 
         // Widget expects a JSON string with keys: fajr, sun, dhuhr, asr, maghrib, isha
         const widgetData = {

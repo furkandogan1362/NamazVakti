@@ -14,7 +14,6 @@ import * as storageService from '../services/storageService';
 import { updateWidget, syncWidgetMonthlyCache } from '../services/WidgetService';
 import { GPSLocationResult } from '../components/GPSLocationService';
 import { MapLocationResult } from '../components/MapLocationSelector';
-import { SelectedLocation } from '../types/types';
 import {
     loadThemeOnboardingShown,
     saveThemeOnboardingShown,
@@ -39,19 +38,22 @@ export interface DisplayLocation {
     country: string;
     city: string;
     region: string;
+    coords?: { lat: number; lon: number }; // Koordinat bazlı timezone için
 }
 
 export const useAppLogic = () => {
     // GPS Location Service state
     const [gpsLocationInfo, setGpsLocationInfo] = useState<{
+        id: string;         // Namaz vakti ID'si
         name: string;
         city: string;
         country: string;
+        coords?: { lat: number; lon: number }; // Koordinat bazlı timezone için
     } | null>(null);
     const [locationMode, setLocationMode] = useState<'gps' | 'manual' | null>(null);
 
     const { isOnline } = useNetwork();
-    const { selectedLocation, setSelectedLocation, addSavedLocation } = useLocation();
+    const { selectedLocation, setSelectedLocation, addSavedLocation, updatePrimaryLocation } = useLocation();
     const { theme, toggleTheme, isSmallScreen, screenWidth, fadeAnim } = useTheme();
 
     // Timezone logic
@@ -61,6 +63,7 @@ export const useAppLogic = () => {
                 country: gpsLocationInfo.country,
                 city: gpsLocationInfo.city,
                 region: gpsLocationInfo.name,
+                coords: gpsLocationInfo.coords, // Koordinat bazlı timezone için
             };
         }
         if (gpsLocationInfo && locationMode !== 'manual') {
@@ -68,6 +71,7 @@ export const useAppLogic = () => {
                 country: gpsLocationInfo.country,
                 city: gpsLocationInfo.city,
                 region: gpsLocationInfo.name,
+                coords: gpsLocationInfo.coords, // Koordinat bazlı timezone için
             };
         }
         return {
@@ -82,7 +86,7 @@ export const useAppLogic = () => {
     const { currentDayPrayerTime, allPrayerTimes, setAllPrayerTimes } = usePrayerTimes(timezone);
     const { gpsPrayerTimes, currentDayPrayerTime: gpsCurrentDayPrayerTime, isGPSMode, refreshGPSPrayerTimes, setGpsPrayerTimes: setGPSPrayerTimesHook, setIsGPSMode } = useGPSPrayerTimes(timezone);
     useLocationData();
-    const { showChangeModal, newLocation, setShowChangeModal, shouldAutoApply, setShouldAutoApply } = useLocationChangeCheck();
+    const { showChangeModal, newLocation, newLocationFullAddress, setShowChangeModal, shouldAutoApply, setShouldAutoApply } = useLocationChangeCheck();
 
     const [currentScreen, setCurrentScreen] = useState<ScreenType>('home');
     const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
@@ -95,9 +99,14 @@ export const useAppLogic = () => {
     const [showGPSService, setShowGPSService] = useState(false);
     const [showLocationMethodModal, setShowLocationMethodModal] = useState(false);
     const [showMapSelector, setShowMapSelector] = useState(false);
+    const [isAutoMapLocation, setIsAutoMapLocation] = useState(false); // Otomatik harita seçimi flag'i
     const [showQiblaCompass, setShowQiblaCompass] = useState(false);
     const [isChangingLocation, _setIsChangingLocation] = useState(false);
     const [showWidgetPermissions, setShowWidgetPermissions] = useState(false);
+
+    // Aynı konum modalı için state
+    const [showSameLocationModal, setShowSameLocationModal] = useState(false);
+    const [sameLocationName, setSameLocationName] = useState('');
 
     const themeButtonRef = useRef<React.ElementRef<typeof TouchableOpacity>>(null);
     const locationButtonRef = useRef<React.ElementRef<typeof TouchableOpacity>>(null);
@@ -121,9 +130,11 @@ export const useAppLogic = () => {
 
                 if (gpsCityInfo && savedLocationMode === 'gps') {
                     setGpsLocationInfo({
+                        id: gpsCityInfo.id,
                         name: gpsCityInfo.name,
                         city: gpsCityInfo.city,
                         country: gpsCityInfo.country,
+                        coords: gpsCityInfo.coords, // Koordinat bazlı timezone için
                     });
                     setIsGPSMode(true);
 
@@ -142,7 +153,9 @@ export const useAppLogic = () => {
 
             if (!hasLocation && !cachedPrayerData && !gpsCityInfo && !cachedGpsPrayerTimes) {
                 if (isOnline) {
-                    setShowLocationMethodModal(true);
+                    // GPS yerine Harita ile otomatik konum bul
+                    setIsAutoMapLocation(true);
+                    setShowMapSelector(true);
                 }
             }
 
@@ -272,8 +285,7 @@ export const useAppLogic = () => {
     }, [isOnline, showOfflineModal]);
 
     // Handlers
-    // isAutoUpdate: true ise otomatik GPS güncellemesi, false ise kullanıcı yeni konum ekledi
-    const handleGPSComplete = useCallback(async (result: GPSLocationResult, isAutoUpdate: boolean = false) => {
+    const handleGPSComplete = useCallback(async (result: GPSLocationResult) => {
         setShowGPSService(false);
 
         if (result.cancelled) {
@@ -281,30 +293,45 @@ export const useAppLogic = () => {
             return;
         }
 
+        // GPSLocationService'den gelen sameLocation flag'i kontrolü
+        if (result.sameLocation && result.cityDetail) {
+            console.log('📍 GPS ile seçilen konum mevcut konum ile aynı (sameLocation flag).');
+            setSameLocationName(result.cityDetail.name);
+            setShowSameLocationModal(true);
+            return;
+        }
+
         saveGPSPermissionAsked();
 
         if (result.success && result.cityDetail && result.prayerTimes) {
+            const newLocationId = parseInt(result.cityDetail.id, 10);
+
+            // Koordinatları al (varsa)
+            const coords = result.locationData ? {
+                lat: result.locationData.latitude,
+                lon: result.locationData.longitude,
+            } : undefined;
+
             setLocationMode('gps');
             setIsGPSMode(true);
             setGpsLocationInfo({
+                id: result.cityDetail.id,
                 name: result.cityDetail.name,
                 city: result.cityDetail.city,
                 country: result.cityDetail.country,
+                coords, // Koordinat bazlı timezone için
             });
             setGPSPrayerTimesHook(result.prayerTimes);
             setSelectedLocation({ country: null, city: null, district: null });
             setHasCachedData(true);
 
-            // Sadece kullanıcı manuel olarak yeni konum eklediyse kayıtlı konumlara ekle
-            // Otomatik GPS güncellemesi ise ekleme (birincil konum olarak güncelle)
-            if (!isAutoUpdate) {
-                const selectedLocationToAdd: SelectedLocation = {
-                    country: { name: result.cityDetail.country, code: '', id: 0 },
-                    city: { name: result.cityDetail.city, code: '', id: 0 },
-                    district: { name: result.cityDetail.name, code: '', id: parseInt(result.cityDetail.id, 10) },
-                };
-                addSavedLocation(selectedLocationToAdd);
-            }
+            // Kayıtlı konumlara EKLENMEYecek - sadece "Yeni Konum Ekle" butonu ile eklenecek
+            // Birincil konum olarak güncelle
+            updatePrimaryLocation({
+                country: { name: result.cityDetail.country, code: '', id: 0 },
+                city: { name: result.cityDetail.city, code: '', id: 0 },
+                district: { name: result.cityDetail.name, code: '', id: newLocationId },
+            });
 
             Promise.all([
                 saveLocationMode('gps'),
@@ -314,6 +341,7 @@ export const useAppLogic = () => {
                     name: result.cityDetail.name,
                     city: result.cityDetail.city,
                     country: result.cityDetail.country,
+                    coords, // Koordinatları da kaydet
                 }),
                 saveGPSPrayerTimes(result.prayerTimes),
                 saveGPSLastFetchDate(new Date()),
@@ -322,7 +350,7 @@ export const useAppLogic = () => {
         } else {
             setShowLocationMethodModal(true);
         }
-    }, [setGPSPrayerTimesHook, setSelectedLocation, setIsGPSMode, addSavedLocation]);
+    }, [setGPSPrayerTimesHook, setSelectedLocation, setIsGPSMode, updatePrimaryLocation]);
 
     const handleGPSSkip = useCallback(async () => {
         setShowGPSService(false);
@@ -355,14 +383,33 @@ export const useAppLogic = () => {
 
     const handleMapComplete = useCallback(async (result: MapLocationResult) => {
         setShowMapSelector(false);
+        const isAutoLocation = isAutoMapLocation;
+        setIsAutoMapLocation(false); // Flag'i sıfırla
 
         if (result.cancelled || !result.success) {
-            setShowLocationMethodModal(true);
+            // Sadece kullanıcı tarafından açılan seçicide modal göster
+            if (!isAutoLocation) {
+                setShowLocationMethodModal(true);
+            }
             return;
         }
 
         if (result.locationData) {
-            const { prayerTimeId, city, district, formattedAddress } = result.locationData;
+            const { prayerTimeId, city, district, country, formattedAddress, coords } = result.locationData;
+
+            // Aynı ID kontrolü: Mevcut GPS konumu ile aynı mı?
+            const currentGPSCityInfo = await storageService.loadGPSCityInfo();
+            const currentGPSId = currentGPSCityInfo ? parseInt(currentGPSCityInfo.id, 10) : null;
+
+            if (currentGPSId !== null && currentGPSId === prayerTimeId) {
+                console.log('📍 Haritadan seçilen konum mevcut GPS konumu ile aynı, API çağrısı yapılmıyor.');
+                // Aynı konum - modal göster (sadece kullanıcı tarafından açıldıysa)
+                if (!isAutoLocation) {
+                    setSameLocationName(district || formattedAddress);
+                    setShowSameLocationModal(true);
+                }
+                return;
+            }
 
             try {
                 // Namaz vakitlerini çek
@@ -389,21 +436,23 @@ export const useAppLogic = () => {
                     setLocationMode('gps');
                     setIsGPSMode(true);
                     setGpsLocationInfo({
+                        id: String(prayerTimeId),
                         name: district || formattedAddress,
                         city: city,
-                        country: 'TÜRKİYE',
+                        country: country, // Dinamik ülke adı (Diyanet API'den)
+                        coords: coords, // Koordinat bazlı timezone için
                     });
                     setGPSPrayerTimesHook(convertedPrayerTimes);
                     setSelectedLocation({ country: null, city: null, district: null });
                     setHasCachedData(true);
 
-                    // Kayıtlı konumlara ekle
-                    const selectedLocationToAdd: SelectedLocation = {
-                        country: { name: 'TÜRKİYE', code: 'TR', id: 2 },
+                    // Kayıtlı konumlara EKLENMEYecek - sadece "Yeni Konum Ekle" butonu ile eklenecek
+                    // Birincil konum olarak güncelle (savedLocations[0])
+                    updatePrimaryLocation({
+                        country: { name: country, code: '', id: 0 },
                         city: { name: city, code: '', id: 0 },
                         district: { name: district || formattedAddress, code: '', id: prayerTimeId },
-                    };
-                    addSavedLocation(selectedLocationToAdd);
+                    });
 
                     // Async storage kayıtları
                     Promise.all([
@@ -413,21 +462,26 @@ export const useAppLogic = () => {
                             id: String(prayerTimeId),
                             name: district || formattedAddress,
                             city: city,
-                            country: 'TÜRKİYE',
+                            country: country, // Dinamik ülke adı
+                            coords: coords, // Koordinatlar (timezone için)
                         }),
                         saveGPSPrayerTimes(convertedPrayerTimes),
                         saveGPSLastFetchDate(new Date()),
                     ]).catch(err => console.error('Error saving map location data:', err));
                 } else {
                     console.error('Prayer times not found for map location');
-                    setShowLocationMethodModal(true);
+                    if (!isAutoLocation) {
+                        setShowLocationMethodModal(true);
+                    }
                 }
             } catch (error) {
                 console.error('Error fetching prayer times for map location:', error);
-                setShowLocationMethodModal(true);
+                if (!isAutoLocation) {
+                    setShowLocationMethodModal(true);
+                }
             }
         }
-    }, [setGPSPrayerTimesHook, setSelectedLocation, setIsGPSMode, addSavedLocation]);
+    }, [setGPSPrayerTimesHook, setSelectedLocation, setIsGPSMode, updatePrimaryLocation, isAutoMapLocation]);
 
     const handleBackToHome = useCallback(() => {
         setCurrentScreen('home');
@@ -601,8 +655,8 @@ export const useAppLogic = () => {
                 prayerTimes: convertedPrayerTimes,
             };
 
-            // Otomatik GPS güncellemesi - yeni konum olarak kaydetme
-            await handleGPSComplete(result, true);
+            // Otomatik GPS güncellemesi
+            await handleGPSComplete(result);
         } catch (error) {
             console.error('❌ GPS konum değişikliği hatası:', error);
         }
@@ -646,8 +700,8 @@ export const useAppLogic = () => {
                         prayerTimes: convertedPrayerTimes,
                     };
 
-                    // Otomatik GPS güncellemesi - yeni konum olarak kaydetme
-                    await handleGPSComplete(result, true);
+                    // Otomatik GPS güncellemesi
+                    await handleGPSComplete(result);
                 } catch (error) {
                     console.error('❌ Otomatik GPS konumu uygulama hatası:', error);
                 }
@@ -687,6 +741,7 @@ export const useAppLogic = () => {
         activePrayerTime,
         showChangeModal,
         newLocation,
+        newLocationFullAddress,
         toggleTheme,
         setShowWidgetPermissions,
         setShowQiblaCompass,
@@ -710,5 +765,10 @@ export const useAppLogic = () => {
         setShowLocationMethodModal,
         setShowChangeModal,
         addSavedLocation,
+        // Aynı konum modalı
+        showSameLocationModal,
+        sameLocationName,
+        setShowSameLocationModal,
+        setSameLocationName,
     };
 };

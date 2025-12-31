@@ -263,6 +263,7 @@ export interface GPSCityInfo {
     name: string;
     city: string;
     country: string;
+    coords?: { lat: number; lon: number }; // Koordinatlar (timezone için)
 }
 
 export const saveGPSCityInfo = async (cityInfo: GPSCityInfo): Promise<void> => {

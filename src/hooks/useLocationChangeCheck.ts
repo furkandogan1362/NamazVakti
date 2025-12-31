@@ -1,13 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { PermissionsAndroid, AppState, AppStateStatus } from 'react-native';
 import Geolocation from 'react-native-geolocation-service';
-import { DiyanetService, CityDetail } from '../api/apiDiyanet';
+import { MapLocationService, CompleteLocationData, CityDetail } from '../api/apiDiyanet';
 import { loadGPSCityInfo, loadLocationMode, loadLocationData, loadAutoLocationUpdatePreference } from '../services/storageService';
 import { useNetwork } from '../contexts/NetworkContext';
+
+// Harita verisinden CityDetail formatına dönüştürme helper'ı
+const convertToCityDetail = (data: CompleteLocationData): CityDetail => ({
+    id: String(data.prayerTimeId),
+    name: data.district || data.city, // İlçe yoksa şehir
+    city: data.city,
+    country: data.country,
+    code: '',
+    cityEn: '',
+    countryEn: '',
+    qiblaAngle: '',
+    geographicQiblaAngle: '',
+    distanceToKaaba: '',
+});
 
 export const useLocationChangeCheck = () => {
     const [showChangeModal, setShowChangeModal] = useState(false);
     const [newLocation, setNewLocation] = useState<CityDetail | null>(null);
+    const [newLocationFullAddress, setNewLocationFullAddress] = useState<string>(''); // Detaylı adres (sokak vs.)
     const [isChecking, setIsChecking] = useState(false);
     const [shouldAutoApply, setShouldAutoApply] = useState(false);
     const [isAutoUpdateEnabled, setIsAutoUpdateEnabled] = useState(false);
@@ -39,17 +54,20 @@ export const useLocationChangeCheck = () => {
             Geolocation.getCurrentPosition(
                 async (position) => {
                     try {
-                        // 3. Koordinatlardan şehir bilgisini al
-                        const cityDetail = await DiyanetService.getCityFromLocation(
+                        // 3. Haritadan Konum Bul ile detaylı konum bilgisi al (GPS yerine)
+                        const completeLocation = await MapLocationService.getCompleteLocation(
                             position.coords.latitude,
                             position.coords.longitude
                         );
 
-                        if (!cityDetail) {
-                            console.log('🔍 GPS konum bilgisi alınamadı');
+                        if (!completeLocation) {
+                            console.log('🔍 Harita konum bilgisi alınamadı');
                             setIsChecking(false);
                             return;
                         }
+
+                        // CompleteLocationData'yı CityDetail formatına dönüştür
+                        const cityDetail = convertToCityDetail(completeLocation);
 
                         // 4. Mevcut kayıtlı konumla karşılaştır
                         const locationMode = await loadLocationMode();
@@ -57,10 +75,11 @@ export const useLocationChangeCheck = () => {
                         let currentDistrictName = '';
                         let currentLocationId = '';
 
-                        console.log('🔍 Konum değişikliği kontrolü:', {
+                        console.log('🔍 Konum değişikliği kontrolü (Harita ile):', {
                             locationMode,
-                            newLocation: `${cityDetail.name}, ${cityDetail.city}`,
-                            newLocationId: cityDetail.id,
+                            newLocation: completeLocation.formattedAddress,
+                            newLocationId: completeLocation.prayerTimeId,
+                            detail: completeLocation.detail,
                         });
 
                         if (locationMode === 'gps') {
@@ -94,7 +113,7 @@ export const useLocationChangeCheck = () => {
                         const normalize = (str: string) => str ? str.toLowerCase().trim() : '';
 
                         // ID ile karşılaştır (daha güvenilir)
-                        const isDifferentById = currentLocationId && cityDetail.id !== currentLocationId;
+                        const isDifferentById = currentLocationId && String(completeLocation.prayerTimeId) !== currentLocationId;
 
                         const isDifferentByName =
                             (currentCityName && normalize(cityDetail.city) !== normalize(currentCityName)) ||
@@ -115,8 +134,14 @@ export const useLocationChangeCheck = () => {
                         });
 
                         if (hasExistingLocation && isDifferent) {
-                            console.log('📍 GPS konum değişikliği tespit edildi:', `${currentDistrictName} -> ${cityDetail.name}`);
+                            // Detaylı adres bilgisini oluştur (sokak/mahalle dahil)
+                            const fullAddress = completeLocation.detail
+                                ? `${completeLocation.district || completeLocation.city}, ${completeLocation.detail}`
+                                : completeLocation.formattedAddress;
+
+                            console.log('📍 Harita konum değişikliği tespit edildi:', `${currentDistrictName} -> ${fullAddress}`);
                             setNewLocation(cityDetail);
+                            setNewLocationFullAddress(fullAddress);
 
                             // Otomatik güncelleme aktifse modal gösterme, direkt uygula
                             if (autoUpdatePreference) {
@@ -127,8 +152,13 @@ export const useLocationChangeCheck = () => {
                             }
                         } else if (!hasExistingLocation && locationMode === 'gps') {
                             // GPS modunda ama mevcut konum yok - yeni konumu otomatik kullan (modal gösterme)
-                            console.log('📍 GPS modunda ilk konum tespit edildi:', cityDetail.name);
+                            const fullAddress = completeLocation.detail
+                                ? `${completeLocation.district || completeLocation.city}, ${completeLocation.detail}`
+                                : completeLocation.formattedAddress;
+
+                            console.log('📍 GPS modunda ilk konum tespit edildi:', fullAddress);
                             setNewLocation(cityDetail);
+                            setNewLocationFullAddress(fullAddress);
                             // Modal göstermeden otomatik uygulama için flag set et
                             setShouldAutoApply(true);
                         }
@@ -199,6 +229,7 @@ export const useLocationChangeCheck = () => {
     return {
         showChangeModal,
         newLocation,
+        newLocationFullAddress, // Detaylı adres (sokak, mahalle vs.)
         setShowChangeModal,
         checkLocationChange,
         shouldAutoApply,

@@ -8,9 +8,12 @@ import { getApiClient, PrayerTimeData, PrayerPeriod } from './apiDiyanetManuel';
 // --- Mevcut Tipler ---
 export interface CityDetail {
   id: string;
-  name: string;
-  city: string;
-  country: string;
+  name: string;           // Şehir/Bölge adı (Örn: "WASHINGTON", "NIEDERSACHSEN")
+  code: string;           // Şehir kodu
+  city: string;           // Eyalet/Bölge kısaltması (Örn: "D.C")
+  cityEn: string;         // İngilizce eyalet adı
+  country: string;        // Ülke adı (Örn: "ABD", "ALMANYA")
+  countryEn: string;      // İngilizce ülke adı (Örn: "USA", "GERMANY")
   qiblaAngle: string;
   geographicQiblaAngle: string;
   distanceToKaaba: string;
@@ -43,7 +46,8 @@ export interface OsmAddressResult {
 }
 
 // --- YENİ: Diyanet (Yerleşim Yeri) Tipleri ---
-// Endpoint: CityFromSettlement
+// Endpoint: CityFromSettlement (ŞİMDİLİK DEVRE DIŞI)
+/*
 export interface CitySettlementResult {
   id: number;           // Namaz Vakti ID'si (Örn: 9206)
   name: string;         // Örn: "ANKARA"
@@ -63,14 +67,16 @@ interface SettlementResponse {
   data: CitySettlementResult;
   success: boolean;
 }
+*/
 
 // --- YENİ: Birleştirilmiş Sonuç Tipi (UI Kullanımı İçin) ---
 export interface CompleteLocationData {
   prayerTimeId: number;     // Namaz vakitlerini çekeceğin ID (9206)
-  formattedAddress: string; // "ANKARA, Keçiören, 1728 Sokak"
-  city: string;             // "ANKARA"
-  district: string;         // "Keçiören"
-  detail: string;           // "1728 Sokak"
+  formattedAddress: string; // "WASHINGTON, Georgetown, ABD"
+  city: string;             // Şehir/Bölge adı (Örn: "WASHINGTON")
+  district: string;         // İlçe/Kasaba (OSM'den) (Örn: "Georgetown")
+  country: string;          // Ülke adı (Örn: "ABD")
+  detail: string;           // Sokak/Mahalle detayı
   coords: {
     lat: number;
     lon: number;
@@ -149,7 +155,8 @@ export const MapLocationService = {
     }
   },
 
-  // 2. Diyanet'ten Hiyerarşik Konum Bilgisi Çekme (CityFromSettlement)
+  // 2. Diyanet'ten Hiyerarşik Konum Bilgisi Çekme (CityFromSettlement) - ŞİMDİLİK DEVRE DIŞI
+  /*
   getDiyanetSettlement: async (lat: number, lon: number): Promise<CitySettlementResult | null> => {
     try {
       const apiClient = await getApiClient(); // Güvenli client
@@ -163,18 +170,23 @@ export const MapLocationService = {
       return null;
     }
   },
+  */
 
   /**
    * ANA FONKSİYON: Haritaya tıklandığında çağrılacak.
-   * Hem OSM hem Diyanet verisini paralel çeker ve birleştirir.
+   * OSM'den adres detayı, Diyanet'ten (getCityFromLocation) namaz vakti ID'si alınır.
+   * KÖPRÜ: Koordinatlar (Lat/Lon)
+   * - OSM: Sokak/Mahalle/Köy gibi detaylı adres (Display Name)
+   * - Diyanet: Namaz vakti bölgesi ID'si
    * Çıktı Formatı: "ANKARA, Keçiören, 1728 Sokak"
    */
   getCompleteLocation: async (lat: number, lon: number): Promise<CompleteLocationData | null> => {
     try {
       // İki isteği aynı anda atıyoruz (Performans için)
+      // OSM: Görsel adres için | Diyanet: Namaz vakti ID'si için
       const [osmData, diyanetData] = await Promise.all([
         MapLocationService.getOsmDetails(lat, lon),
-        MapLocationService.getDiyanetSettlement(lat, lon),
+        DiyanetService.getCityFromLocation(lat, lon),
       ]);
 
       if (!diyanetData) {
@@ -184,30 +196,32 @@ export const MapLocationService = {
 
       // --- FORMATLAMA MANTIĞI ---
 
-      // 1. Şehir (İl): Diyanet'ten gelir (Örn: "ANKARA")
-      // Bazen name ilçe olabilir, state.name garanti ildir.
-      const city = diyanetData.state?.name || diyanetData.name;
+      // 1. Şehir/Bölge: Diyanet'ten 'name' alanı (Örn: "WASHINGTON", "NIEDERSACHSEN")
+      const city = diyanetData.name;
 
-      // 2. İlçe: OSM'den 'town', yoksa 'suburb', o da yoksa 'city'
-      const district = osmData?.address?.town || osmData?.address?.suburb || osmData?.address?.city || '';
+      // 2. İlçe/Kasaba: OSM'den 'road', yoksa 'suburb', o da yoksa 'city'
+      const district = osmData?.address?.road || osmData?.address?.suburb || osmData?.address?.city || '';
 
-      // 3. Detay (Sokak/Mahalle): OSM'den 'road', yoksa 'suburb'
-      // Eğer ilçe ismi ile detay aynıysa (örn: ikisi de mahalle adıysa) detayı tekrar yazdırma
+      // 3. Ülke: Diyanet'ten 'country' alanı (Örn: "ABD", "ALMANYA")
+      const country = diyanetData.country;
+
+      // 4. Detay (Sokak/Mahalle): OSM'den 'road', yoksa 'suburb'
       let detail = osmData?.address?.road || '';
       if (!detail && district !== osmData?.address?.suburb) {
         detail = osmData?.address?.suburb || '';
       }
 
       // Parçaları birleştir ve boş olanları temizle
-      // Örn: ["ANKARA", "Keçiören", "1728 Sokak"]
-      const parts = [city, district, detail].filter(p => p && p.trim() !== '');
+      // Format: "WASHINGTON, Georgetown, ABD" veya "NIEDERSACHSEN, Herzberg am Harz, ALMANYA"
+      const parts = [city, district, country].filter(p => p && p.trim() !== '');
       const formattedAddress = parts.join(', ');
 
       return {
-        prayerTimeId: diyanetData.id, // Örn: 9206
-        formattedAddress: formattedAddress, // Örn: "ANKARA, Keçiören, 1728 Sokak"
+        prayerTimeId: parseInt(diyanetData.id, 10), // CityDetail.id string, number'a çevir
+        formattedAddress: formattedAddress,
         city,
         district,
+        country,
         detail,
         coords: { lat, lon },
       };

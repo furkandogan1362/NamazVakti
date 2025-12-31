@@ -86,10 +86,11 @@ interface LocationInfo {
     country: string;
     city: string;
     region: string;
+    coords?: { lat: number; lon: number }; // Koordinatlar (daha doğru timezone için)
 }
 
 export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
-    const { country, city, region } = location;
+    const { country, city, region, coords } = location;
     const [timezone, setTimezone] = useState<string>(Intl.DateTimeFormat().resolvedOptions().timeZone);
     const [loading, setLoading] = useState(false);
     const [timeDiff, _setTimeDiff] = useState(0);
@@ -100,10 +101,32 @@ export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
         // Bu sayede yeni konum yüklenirken eski konumun saat dilimi (örn: Singapur) kullanılmaz
         setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone);
 
+        // Koordinat bazlı timezone lookup - en doğru yöntem
+        const fetchTimezoneByCoords = async (lat: number, lon: number): Promise<string | null> => {
+            try {
+                // Open-Meteo forecast API'si koordinat bazlı timezone döndürür
+                const response = await fetch(
+                    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&timezone=auto&forecast_days=1`
+                );
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.timezone) {
+                        return data.timezone;
+                    }
+                }
+            } catch (e) {
+                console.error('Error fetching timezone by coords:', e);
+            }
+            return null;
+        };
+
         const fetchTimezone = async () => {
             if (!country || !city) {return;}
 
-            const cacheKey = `${TIMEZONE_CACHE_KEY}_${country}_${city}_${region}`;
+            // Koordinat bazlı cache key - daha spesifik
+            const cacheKey = coords
+                ? `${TIMEZONE_CACHE_KEY}_coords_${coords.lat.toFixed(4)}_${coords.lon.toFixed(4)}`
+                : `${TIMEZONE_CACHE_KEY}_${country}_${city}_${region}`;
 
             // Try cache first
             try {
@@ -120,27 +143,35 @@ export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
 
             setLoading(true);
             try {
-                // Strategy: Try Region first, then City, then Country
                 let foundTz = null;
 
-                // 1. Try Region (e.g. "Auburn")
-                if (region && region !== city) {
-                    foundTz = await searchLocation(region, country);
+                // 1. Koordinat varsa önce koordinat bazlı dene - en doğru yöntem
+                if (coords && coords.lat && coords.lon) {
+                    foundTz = await fetchTimezoneByCoords(coords.lat, coords.lon);
                 }
 
-                // 2. Try City (e.g. "Alabama" or "Istanbul")
-                if (!foundTz && city) {
-                    foundTz = await searchLocation(city, country);
-                }
+                // 2. Koordinat yoksa veya başarısızsa, isim bazlı aramaya geri dön
+                if (!foundTz) {
+                    // Strategy: Try Region first, then City, then Country
+                    // 2a. Try Region (e.g. "Auburn")
+                    if (region && region !== city) {
+                        foundTz = await searchLocation(region, country);
+                    }
 
-                // 3. Try Country (e.g. "ABD")
-                if (!foundTz && country) {
-                    foundTz = await searchLocation(country);
-                }
+                    // 2b. Try City (e.g. "Alabama" or "Istanbul")
+                    if (!foundTz && city) {
+                        foundTz = await searchLocation(city, country);
+                    }
 
-                // Fallback for Turkey if nothing found
-                if (!foundTz && (country === 'TÜRKİYE' || country === 'Turkey')) {
-                     foundTz = 'Europe/Istanbul';
+                    // 2c. Try Country (e.g. "ABD")
+                    if (!foundTz && country) {
+                        foundTz = await searchLocation(country);
+                    }
+
+                    // Fallback for Turkey if nothing found
+                    if (!foundTz && (country === 'TÜRKİYE' || country === 'Turkey')) {
+                         foundTz = 'Europe/Istanbul';
+                    }
                 }
 
                 if (foundTz) {
@@ -162,7 +193,7 @@ export const useLocationTime = (location: LocationInfo): LocationTimeHook => {
         // Konum değiştiğinde timezone'u geçici olarak sıfırla ve yeniden fetch et
         // Bu sayede eski timezone kullanılmaz
         fetchTimezone();
-    }, [country, city, region, isOnline]);
+    }, [country, city, region, coords, isOnline]);
 
     return { timezone, loading, timeDiff };
 };

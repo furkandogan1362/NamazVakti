@@ -29,6 +29,7 @@ interface LocationContextType {
     addSavedLocation: (location: SelectedLocation) => void;
     removeSavedLocation: (location: SelectedLocation) => void;
     updateSavedLocations: (locations: SelectedLocation[]) => void;
+    updatePrimaryLocation: (location: SelectedLocation) => void;
 }
 
 const defaultSelectedLocation: SelectedLocation = {
@@ -52,6 +53,7 @@ const LocationContext = createContext<LocationContextType>({
     addSavedLocation: () => {},
     removeSavedLocation: () => {},
     updateSavedLocations: () => {},
+    updatePrimaryLocation: () => {},
 });
 
 export const LocationProvider: React.FC<{children: React.ReactNode}> = ({ children }) => {
@@ -113,6 +115,39 @@ export const LocationProvider: React.FC<{children: React.ReactNode}> = ({ childr
         await storageService.saveSavedLocations(locations);
     }, []);
 
+    // Birincil konumu güncelle (savedLocations[0])
+    // Eğer aynı ID varsa günceller, yoksa ilk sıraya ekler
+    const updatePrimaryLocation = useCallback(async (location: SelectedLocation) => {
+        const locationId = location.district?.id;
+
+        // Aynı ID ile mevcut konum var mı kontrol et
+        const existingIndex = savedLocations.findIndex(l => {
+            if (l.district?.id && locationId && l.district.id !== 0 && locationId !== 0) {
+                return l.district.id === locationId;
+            }
+            const name1 = (l.district?.name || l.city?.name || '').toLowerCase().trim();
+            const name2 = (location.district?.name || location.city?.name || '').toLowerCase().trim();
+            return name1 === name2 && name1 !== '';
+        });
+
+        let newLocations: SelectedLocation[];
+
+        if (existingIndex !== -1) {
+            // Mevcut konum bulundu - önce kaldır, sonra başa ekle
+            newLocations = savedLocations.filter((_, index) => index !== existingIndex);
+            newLocations.unshift(location);
+        } else if (savedLocations.length === 0) {
+            // Hiç konum yok - yeni olarak ekle
+            newLocations = [location];
+        } else {
+            // Mevcut değil - birincil konumu güncelle (ilk elemanı değiştir)
+            newLocations = [location, ...savedLocations.slice(1)];
+        }
+
+        setSavedLocations(newLocations);
+        await storageService.saveSavedLocations(newLocations);
+    }, [savedLocations]);
+
     return (
         <LocationContext.Provider value={{
             countries,
@@ -129,6 +164,7 @@ export const LocationProvider: React.FC<{children: React.ReactNode}> = ({ childr
             addSavedLocation,
             removeSavedLocation,
             updateSavedLocations,
+            updatePrimaryLocation,
         }}>
             {children}
         </LocationContext.Provider>
