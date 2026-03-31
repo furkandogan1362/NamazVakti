@@ -36,20 +36,29 @@ Bu proje şu anda yalnızca **Android** için test edilmiştir.
 
 ## Ekran Görüntüleri
 
-### konum-belirleme.png
-Konum belirleme yöntemleri ekranı (GPS, harita ve manuel seçim).
-
-![konum-belirleme.png](docs/screenshots/konum-belirleme.png)
-
-### ana-ekran.png
-Anlık vakit, geri sayım ve günlük vakit kartlarının bulunduğu ana ekran.
-
-![ana-ekran.png](docs/screenshots/ana-ekran.png)
-
-### kible-pusulasi.png
-Kıble yönünü derece farkı ile gösteren pusula ekranı.
-
-![kible-pusulasi.png](docs/screenshots/kible-pusulasi.png)
+<table>
+	<tr>
+		<th>konum-belirleme.png</th>
+		<th>ana-ekran.png</th>
+		<th>kible-pusulasi.png</th>
+	</tr>
+	<tr>
+		<td align="center">
+			<img src="docs/screenshots/konum-belirleme.png" alt="konum-belirleme" width="240" />
+		</td>
+		<td align="center">
+			<img src="docs/screenshots/ana-ekran.png" alt="ana-ekran" width="240" />
+		</td>
+		<td align="center">
+			<img src="docs/screenshots/kible-pusulasi.png" alt="kible-pusulasi" width="240" />
+		</td>
+	</tr>
+	<tr>
+		<td>Konum belirleme yöntemleri ekranı (GPS, harita ve manuel seçim).</td>
+		<td>Anlık vakit, geri sayım ve günlük vakit kartlarının bulunduğu ana ekran.</td>
+		<td>Kıble yönünü derece farkı ile gösteren pusula ekranı.</td>
+	</tr>
+</table>
 
 ## Gereksinimler (Android)
 
