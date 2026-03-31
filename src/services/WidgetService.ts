@@ -93,7 +93,6 @@ const getTimezoneForLocation = async (locationDetail: { country: string; city: s
 
     // Cache'de varsa direkt döndür
     if (timezoneCache[cacheKey]) {
-        console.log('🕐 Widget timezone (cache):', timezoneCache[cacheKey]);
         return timezoneCache[cacheKey];
     }
 
@@ -157,29 +156,17 @@ const getTimezoneForLocation = async (locationDetail: { country: string; city: s
 
         // 1. Önce district (ilçe/kasaba) ile ara - en spesifik
         if (locationDetail.district) {
-            console.log('🔍 Timezone araması (district):', locationDetail.district);
             foundTimezone = await searchTimezone(locationDetail.district);
-            if (foundTimezone) {
-                console.log('🕐 Widget timezone (API - district):', foundTimezone, 'for', locationDetail.district);
-            }
         }
 
         // 2. District'te bulunamazsa city (şehir/eyalet) ile ara
         if (!foundTimezone && locationDetail.city && locationDetail.city !== locationDetail.district) {
-            console.log('🔍 Timezone araması (city):', locationDetail.city);
             foundTimezone = await searchTimezone(locationDetail.city);
-            if (foundTimezone) {
-                console.log('🕐 Widget timezone (API - city):', foundTimezone, 'for', locationDetail.city);
-            }
         }
 
         // 3. Hala bulunamazsa country (ülke) ile ara
         if (!foundTimezone && locationDetail.country) {
-            console.log('🔍 Timezone araması (country):', locationDetail.country);
             foundTimezone = await searchTimezone(locationDetail.country);
-            if (foundTimezone) {
-                console.log('🕐 Widget timezone (API - country):', foundTimezone, 'for', locationDetail.country);
-            }
         }
 
         if (foundTimezone) {
@@ -191,7 +178,6 @@ const getTimezoneForLocation = async (locationDetail: { country: string; city: s
     }
 
     // Fallback: cihaz timezone'u
-    console.log('🕐 Widget timezone (fallback):', deviceTimezone);
     return deviceTimezone;
 };
 
@@ -245,8 +231,6 @@ export const syncWidgetMonthlyCache = async (
         const timezoneId = locationDetail
             ? await getTimezoneForLocation(locationDetail)
             : Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-        console.log('📱 Widget aylık cache güncelleniyor (final):', { locationName, timezoneId });
 
         // Prepare compact monthly payload for native widget
         const days = monthlyPrayerTimes.map(pt => ({

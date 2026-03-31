@@ -176,37 +176,14 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
 
             if (!currentPermission) {
                 // İzin yok
-                // Ayarlardan dönüldüyse veya ilk kez soruyorsak - request yap
-                if (fromSettings || !permissionAskedOnce) {
-                    if (!fromSettings) {
-                        setPermissionAskedOnce(true);
-                    }
-                    setStatus('requesting');
-                    const granted = await PermissionsAndroid.request(
-                        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-                        {
-                            title: 'Konum İzni',
-                            message: 'Namaz vakitlerini doğru gösterebilmek için konumunuza erişmemiz gerekiyor.',
-                            buttonPositive: 'İzin Ver',
-                            buttonNegative: 'İptal',
-                        }
-                    );
-
-                    if (granted === PermissionsAndroid.RESULTS.GRANTED) {
-                        // İzin verildi, devam et
-                    } else if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
-                        setStatusAnimated('blocked');
-                        return;
-                    } else {
-                        // Reddedildi
-                        if (fromSettings) {
-                            // Ayarlardan dönüp reddettiyse, blocked göster
-                            setStatusAnimated('blocked');
-                        } else {
-                            setStatusAnimated('denied');
-                        }
-                        return;
-                    }
+                if (fromSettings) {
+                    // Ayarlardan döndü, hala izin yoksa blocked göster
+                    setStatusAnimated('blocked');
+                    return;
+                } else if (!permissionAskedOnce) {
+                    // İlk kez - custom modal göster (requesting state)
+                    setStatusAnimated('requesting');
+                    return; // Kullanıcı "İzin Ver" butonuna basmasını bekle
                 } else if (isRetry || permissionAskedOnce) {
                     // Daha önce izin istendi ve retry - doğrudan blocked'a geç
                     setStatusAnimated('blocked');
@@ -214,6 +191,7 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                 }
             }
             // İzin zaten var, devam et
+            await continueWithLocation();
         } else {
             // iOS için izin kontrolü
             try {
@@ -222,6 +200,7 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                     setStatusAnimated(authStatus === 'denied' ? 'blocked' : 'denied');
                     return;
                 }
+                await continueWithLocation();
             } catch (err) {
                 console.error('iOS permission error:', err);
                 setStatus('error');
@@ -229,7 +208,29 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                 return;
             }
         }
+    };
 
+    // Kullanıcı "İzin Ver" butonuna bastığında sistem dialogunu aç
+    const requestSystemPermission = async () => {
+        setPermissionAskedOnce(true);
+
+        const granted = await PermissionsAndroid.request(
+            PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+        );
+
+        if (granted === PermissionsAndroid.RESULTS.GRANTED) {
+            // İzin verildi, devam et
+            await continueWithLocation();
+        } else if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+            setStatusAnimated('blocked');
+        } else {
+            // Reddedildi
+            setStatusAnimated('denied');
+        }
+    };
+
+    // Konum alma ve API çağrısı devam fonksiyonu
+    const continueWithLocation = async () => {
         // 2. GPS konumunu al (izin varsa direkt konum almaya geç)
         setStatus('loading_location');
 
@@ -477,8 +478,8 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
         }
     };
 
-    // Yükleniyor durumu
-    const isLoading = ['checking', 'requesting', 'loading_location', 'loading_data', 'checking_cache'].includes(status);
+    // Yükleniyor durumu (requesting hariç - kullanıcı aksiyonu bekliyor)
+    const isLoading = ['checking', 'loading_location', 'loading_data', 'checking_cache'].includes(status);
 
     // Animasyonlu kapanış
     const animateOut = (callback: () => void) => {
@@ -498,8 +499,8 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
 
     // Geri tuşu ile modalı kapatma
     const handleBackPress = () => {
-        // Yükleme durumunda değilse veya hata/red durumunday sa geri dönebilir
-        if (!isLoading || status === 'error' || status === 'denied' || status === 'blocked') {
+        // Yükleme durumunda değilse veya hata/red/izin isteme durumundaysa geri dönebilir
+        if (!isLoading || status === 'error' || status === 'denied' || status === 'blocked' || status === 'requesting') {
             // cancelled: true ile konum yöntemi seçim ekranına dön
             animateOut(() => onComplete({ success: false, cancelled: true }));
         }
@@ -601,14 +602,23 @@ const GPSLocationService: React.FC<GPSLocationServiceProps> = ({
                                     </>
                                 )}
 
-                                {/* İzin isteme durumunda skip seçeneği */}
+                                {/* İzin isteme durumunda - Custom Modal */}
                                 {status === 'requesting' && (
-                                    <TouchableOpacity
-                                        style={styles.skipLinkButton}
-                                        onPress={handleSkip}
-                                    >
-                                        <Text style={styles.skipLinkText}>Manuel olarak konum seçmek istiyorum</Text>
-                                    </TouchableOpacity>
+                                    <>
+                                        <TouchableOpacity
+                                            style={styles.retryButton}
+                                            onPress={requestSystemPermission}
+                                        >
+                                            <MaterialIcons name="check" size={20} color="#FFFFFF" />
+                                            <Text style={styles.retryButtonText}>İzin Ver</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={styles.skipButton}
+                                            onPress={handleSkip}
+                                        >
+                                            <Text style={styles.skipButtonText}>Manuel Konum Seç</Text>
+                                        </TouchableOpacity>
+                                    </>
                                 )}
                             </View>
                         </View>

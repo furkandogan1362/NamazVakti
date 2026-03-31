@@ -24,6 +24,9 @@ import {
     Animated as RNAnimated,
     StyleSheet,
     Dimensions,
+    Linking,
+    AppState,
+    AppStateStatus,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import Geolocation from 'react-native-geolocation-service';
@@ -341,6 +344,8 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
     // State
     const [permissionStatus, setPermissionStatus] = useState<PermissionStatus>('checking');
     const [showPermissionModal, setShowPermissionModal] = useState(false); // Özel izin modalı
+    const [permissionAskedOnce, setPermissionAskedOnce] = useState(false); // İzin daha önce soruldu mu?
+    const [waitingForSettings, setWaitingForSettings] = useState(false); // Ayarlardan dönüş bekleniyor mu?
     const [currentCoords, setCurrentCoords] = useState<{ lat: number; lon: number } | null>(null);
     const [locationData, setLocationData] = useState<CompleteLocationData | null>(null);
     const [isLoadingAddress, setIsLoadingAddress] = useState(false);
@@ -354,6 +359,7 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
     const webViewRef = useRef<WebView>(null);
     const initialCoordsRef = useRef<{ lat: number; lon: number } | null>(null);
     const toastOpacity = useRef(new RNAnimated.Value(0)).current;
+    const appState = useRef(AppState.currentState);
 
     // Varsayılan konum (Türkiye merkezi - Ankara)
     const defaultCoords = { lat: 39.9334, lon: 32.8597 };
@@ -394,8 +400,33 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visible]);
 
+    // Ayarlardan döndüğünde izin durumunu kontrol et
+    useEffect(() => {
+        const handleAppStateChange = async (nextAppState: AppStateStatus) => {
+            // Uygulama arka plandan ön plana geldiğinde
+            if (
+                appState.current.match(/inactive|background/) &&
+                nextAppState === 'active' &&
+                waitingForSettings &&
+                visible
+            ) {
+                setWaitingForSettings(false);
+                // Ayarlardan dönüldü, izin durumunu tekrar kontrol et
+                checkPermissionAndStart(true);
+            }
+            appState.current = nextAppState;
+        };
+
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+
+        return () => {
+            subscription.remove();
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [waitingForSettings, visible]);
+
     // İzin kontrolü (sadece Android)
-    const checkPermissionAndStart = async () => {
+    const checkPermissionAndStart = async (fromSettings: boolean = false) => {
         setPermissionStatus('checking');
         setErrorMessage('');
 
@@ -404,22 +435,36 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
         );
 
         if (!hasPermission) {
-            // İzin yok - modern modalı göster
-            setShowPermissionModal(true);
-            setPermissionStatus('denied');
+            // İlk kez soruyorsak veya ayarlardan döndüysek
+            if (!permissionAskedOnce || fromSettings) {
+                // İzin yok - modern modalı göster
+                setShowPermissionModal(true);
+                setPermissionStatus('denied');
+            } else {
+                // Daha önce soruldu ve reddedildi - blocked olarak işaretle
+                setPermissionStatus('blocked');
+                setShowPermissionModal(true);
+            }
         } else {
             setPermissionStatus('granted');
             getCurrentLocation();
         }
     };
 
+    // Ayarlara yönlendir
+    const openSettings = () => {
+        setWaitingForSettings(true);
+        setShowPermissionModal(false);
+        Linking.openSettings();
+    };
+
     // Sistem izin dialogunu aç (kullanıcı modalda "İzin Ver" dediğinde)
     const requestSystemPermission = async () => {
         setShowPermissionModal(false);
         setPermissionStatus('requesting');
+        setPermissionAskedOnce(true);
 
-        // Sadece izin iste - rationale parametresi olmadan
-        // Böylece bizim custom modalımızı görür, sonra sistem pop-up'ı çıkar
+        // Sadece izin iste
         const granted = await PermissionsAndroid.request(
             PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
         );
@@ -427,6 +472,10 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
         if (granted === PermissionsAndroid.RESULTS.GRANTED) {
             setPermissionStatus('granted');
             getCurrentLocation();
+        } else if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+            // Kalıcı olarak engellendi
+            setPermissionStatus('blocked');
+            setShowPermissionModal(true);
         } else {
             // İzin reddedildi - haritayı varsayılan konumla aç ve toast göster
             openMapWithDefaultLocation();
@@ -588,11 +637,13 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
         onClose();
     };
 
-    // İzin modal render - Modern Overlay Modal
+    // İzin modal render - GPSLocationService tarzı Modern Modal
     const renderPermissionModal = () => {
         if (!showPermissionModal) {
             return null;
         }
+
+        const isBlocked = permissionStatus === 'blocked';
 
         return (
             <View style={permissionModalStyles.overlay}>
@@ -602,28 +653,34 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
                         {/* İkon */}
                         <View style={[
                             permissionModalStyles.iconContainer,
-                            { backgroundColor: theme.colors.accent + '20' },
+                            { backgroundColor: isBlocked ? '#EF4444' + '20' : theme.colors.accent + '20' },
                         ]}>
                             <MaterialIcons
-                                name="location-on"
+                                name={isBlocked ? 'location-off' : 'location-on'}
                                 size={40}
-                                color={theme.colors.accent}
+                                color={isBlocked ? '#EF4444' : theme.colors.accent}
                             />
                         </View>
 
                         {/* Başlık */}
-                        <Text style={permissionModalStyles.title}>Konum İzni Gerekli</Text>
+                        <Text style={permissionModalStyles.title}>
+                            {isBlocked ? 'İzin Engellendi' : 'Konum İzni Gerekli'}
+                        </Text>
 
                         {/* Açıklama */}
                         <Text style={permissionModalStyles.message}>
-                            Haritada konumunuzu gösterebilmemiz için konum erişim izni vermeniz gerekmektedir.
+                            {isBlocked
+                                ? 'Konum izni kalıcı olarak reddedildi. Haritada konumunuzu gösterebilmemiz için ayarlardan izin vermeniz gerekiyor.'
+                                : 'Haritada konumunuzu gösterebilmemiz için konum erişim izni vermeniz gerekmektedir.'}
                         </Text>
 
                         {/* Bilgi Kutusu */}
                         <View style={permissionModalStyles.infoBox}>
                             <MaterialIcons name="info-outline" size={18} color={theme.colors.secondaryText} />
                             <Text style={permissionModalStyles.infoText}>
-                                İzin vermezseniz de haritayı kullanabilirsiniz, ancak konumunuz otomatik tespit edilemez.
+                                {isBlocked
+                                    ? 'Ayarlar > Uygulamalar > Namaz Vakti > İzinler > Konum yolunu izleyerek izin verebilirsiniz.'
+                                    : 'İzin vermezseniz de haritayı kullanabilirsiniz, ancak konumunuz otomatik tespit edilemez.'}
                             </Text>
                         </View>
 
@@ -633,15 +690,26 @@ const MapLocationSelector: React.FC<MapLocationSelectorProps> = ({
                                 style={permissionModalStyles.secondaryButton}
                                 onPress={handleSkipPermission}
                             >
-                                <Text style={permissionModalStyles.secondaryButtonText}>Atla</Text>
+                                <Text style={permissionModalStyles.secondaryButtonText}>
+                                    {isBlocked ? 'Manuel Konum Seç' : 'Atla'}
+                                </Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
-                                style={permissionModalStyles.primaryButton}
-                                onPress={requestSystemPermission}
+                                style={[
+                                    permissionModalStyles.primaryButton,
+                                    isBlocked && { backgroundColor: '#3B82F6' },
+                                ]}
+                                onPress={isBlocked ? openSettings : requestSystemPermission}
                             >
-                                <MaterialIcons name="check" size={20} color="#FFFFFF" />
-                                <Text style={permissionModalStyles.primaryButtonText}>İzin Ver</Text>
+                                <MaterialIcons
+                                    name={isBlocked ? 'settings' : 'check'}
+                                    size={20}
+                                    color="#FFFFFF"
+                                />
+                                <Text style={permissionModalStyles.primaryButtonText}>
+                                    {isBlocked ? 'Ayarları Aç' : 'İzin Ver'}
+                                </Text>
                             </TouchableOpacity>
                         </View>
                     </View>

@@ -149,13 +149,12 @@ export const useAppLogic = () => {
                 }
             }
 
+            // Kullanıcı ilk kez giriş yaptıysa LocationMethodModal açılacak
             const hasLocation = selectedLocation.country && selectedLocation.city && selectedLocation.district;
-
             if (!hasLocation && !cachedPrayerData && !gpsCityInfo && !cachedGpsPrayerTimes) {
                 if (isOnline) {
-                    // GPS yerine Harita ile otomatik konum bul
-                    setIsAutoMapLocation(true);
-                    setShowMapSelector(true);
+                    // İlk açılışta konum belirleme modalını göster
+                    setShowLocationMethodModal(true);
                 }
             }
 
