@@ -110,7 +110,7 @@ Android Studio içinde şu adımları tamamla:
 3. Device Manager ile en az bir emulator (AVD) oluştur
 4. Emulatorü başlat veya USB hata ayıklama açık fiziksel cihaz bağla
 
-Windows için yaygın PATH değişkenleri:
+Windows için PATH değişkenleri(Genellikle kurulum sırasında otomatik eklenir.Yeniden başlatma gerekebilir.):
 
 - `ANDROID_HOME` veya `ANDROID_SDK_ROOT`
 - `%ANDROID_HOME%\platform-tools`
