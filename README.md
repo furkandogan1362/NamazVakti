@@ -1,19 +1,27 @@
 # NamazVakti
 
-Konum tabanli namaz vakitleri uygulamasi (React Native + TypeScript).
+Konum tabanlı namaz vakitleri uygulaması (React Native + TypeScript).
 
-Bu dokuman, uygulamayi sifirdan kendi bilgisayarina kurup calistirmak isteyen kullanicilar ve gelistiriciler icin hazirlandi.
+Bu doküman, uygulamayı sıfırdan kendi bilgisayarına kurup çalıştırmak isteyen kullanıcılar ve geliştiriciler için hazırlandı.
 
-## Ozellikler
+## Önemli Not
 
-- Gunluk / haftalik / aylik namaz vakitleri
-- GPS ve manuel konum secimi
-- Cevrimdisi calisma icin yerel onbellek
-- Kible pusulasi
-- Android ana ekran widget destegi
-- Acik / koyu tema
+Bu proje şu anda yalnızca **Android** için test edilmiştir.
 
-## Teknoloji Yigini
+- Android dışı platformlar aktif olarak test edilmemiştir.
+- README bu nedenle yalnızca Android kurulum adımlarını içerir.
+
+## Özellikler
+
+- Günlük / haftalık / aylık namaz vakitleri
+- GPS ve manuel konum seçimi
+- Çevrimdışı kullanım için yerel önbellek
+- Kıble pusulası (manyetometre sensörü)
+- Haritadan konum seçimi (WebView + OpenStreetMap)
+- Android ana ekran widget desteği
+- Açık / koyu tema
+
+## Teknoloji Yığını
 
 - React Native 0.75.3
 - React 18.3.1
@@ -22,119 +30,135 @@ Bu dokuman, uygulamayi sifirdan kendi bilgisayarina kurup calistirmak isteyen ku
 - AsyncStorage
 - NetInfo
 - Reanimated
+- React Native WebView
+- React Native Sensors
 - Android native module (Kotlin)
 
-## Gereksinimler
+## Ekran Görüntüleri
 
-Asagidaki araclarin bilgisayarinda kurulu olmasi gerekir:
+### konum-belirleme.png
+Konum belirleme yöntemleri ekranı (GPS, harita ve manuel seçim).
 
-1. Node.js 18+ (proje `node >=18` bekliyor)
-2. npm (Node ile gelir)
+![konum-belirleme.png](docs/screenshots/konum-belirleme.png)
+
+### ana-ekran.png
+Anlık vakit, geri sayım ve günlük vakit kartlarının bulunduğu ana ekran.
+
+![ana-ekran.png](docs/screenshots/ana-ekran.png)
+
+### kible-pusulasi.png
+Kıble yönünü derece farkı ile gösteren pusula ekranı.
+
+![kible-pusulasi.png](docs/screenshots/kible-pusulasi.png)
+
+## Gereksinimler (Android)
+
+Kod tabanı ve Android yapılandırmalarına göre gerekli sürümler:
+
+1. Node.js 18 veya üzeri (`package.json` -> `engines.node >= 18`)
+2. npm
 3. Git
-4. Java Development Kit (JDK) 17 (Android build icin onerilir)
-5. Android Studio (Android SDK + emulator)
-6. Android SDK Platform Tools (`adb` komutu PATH icinde olmali)
-7. iOS icin (sadece macOS): Xcode + CocoaPods
-8. iOS icin Ruby (Gemfile ile pod surumu yonetiliyor)
+4. JDK 17 (önerilen)
+5. Android Studio
+6. Android SDK bileşenleri:
+	- Android SDK Platform 34
+	- Android SDK Build-Tools 34.0.0
+	- Android SDK Platform-Tools (adb)
+	- Android Emulator
+7. NDK 26.1.10909125 (projede tanımlı)
 
-Resmi React Native ortam kurulum rehberi:
+Projeden doğrulanan Android build bilgileri:
 
-- https://reactnative.dev/docs/environment-setup
+- `compileSdkVersion`: 34
+- `targetSdkVersion`: 34
+- `minSdkVersion`: 23
+- `kotlinVersion`: 1.9.24
+- `gradle`: 8.8
 
-Not: Bu proje React Native CLI tabanlidir, Expo projesi degildir.
+Not: Bu proje React Native CLI tabanlıdır, Expo projesi değildir.
 
-## 1) Repoyu Indir
+## 1) Repoyu İndir
 
 ```bash
 git clone https://github.com/furkandogan1362/NamazVakti.git
 cd NamazVakti
 ```
 
-## 2) JavaScript Bagimliliklarini Kur
+## 2) JavaScript Paketlerini Kur
+
+Proje için gerekli tüm JS paketleri `package.json` içinde tanımlıdır.
 
 ```bash
 npm install
 ```
 
-## 3) iOS Bagimliliklari (yalnizca macOS)
+## 3) Android Ortamını Hazırla
 
-Once gem bagimliliklarini kur:
+Android Studio içinde şu adımları tamamla:
 
-```bash
-bundle install
-```
+1. SDK Manager'dan Platform 34 ve Build-Tools 34.0.0 kur
+2. SDK Tools bölümünden Android SDK Command-line Tools ve Platform-Tools kur
+3. Device Manager ile en az bir emulator (AVD) oluştur
+4. Emulatorü başlat veya USB hata ayıklama açık fiziksel cihaz bağla
 
-Ardindan CocoaPods kurulumunu yap:
-
-```bash
-cd ios
-bundle exec pod install
-cd ..
-```
-
-Not: `bundle` kullanmadan `pod install` da calisir, ancak Gemfile surum kilitlemesi nedeniyle `bundle exec pod install` tercih edilir.
-
-## 4) Android Ortamini Hazirla
-
-Android Studio icinde su adimlari tamamla:
-
-1. Android SDK kurulu olsun
-2. En az bir emulator (AVD) olustur
-3. Emulatoru baslat veya USB debug acik fiziksel cihaz bagla
-
-Windows icin yaygin PATH degiskenleri:
+Windows için yaygın PATH değişkenleri:
 
 - `ANDROID_HOME` veya `ANDROID_SDK_ROOT`
 - `%ANDROID_HOME%\platform-tools`
 - `%ANDROID_HOME%\emulator`
 
-`adb devices` komutunda cihaz/emulator gorunuyorsa hazirsin.
+Doğrulama:
 
-## 5) Uygulamayi Calistir
+```bash
+adb devices
+```
 
-### Gelistirme sunucusu (Metro)
+## 4) Uygulamayı Çalıştır
+
+### 4.1 Metro başlat
 
 ```bash
 npm start
 ```
 
-### Android
+### 4.2 Android uygulamasını çalıştır
 
-Ayri bir terminalde:
+Yeni bir terminalde:
 
 ```bash
 npm run android
 ```
 
-### iOS (sadece macOS)
-
-Ayri bir terminalde:
-
-```bash
-npm run ios
-```
-
-## Kullanilabilir NPM Scriptleri
+## Kullanılabilir NPM Scriptleri
 
 - `npm start` -> Metro bundler
-- `npm run android` -> Android debug calistirma
-- `npm run ios` -> iOS debug calistirma
-- `npm run lint` -> ESLint kontrolu
+- `npm run android` -> Android debug çalıştırma
+- `npm run lint` -> ESLint kontrolü
 - `npm test` -> Jest testleri
 
-## Android Widget Notu
+## Android İzinleri ve Widget Notu
 
-Proje Android tarafinda native widget modulune sahiptir. Widget davranisi cihaz ureticisine gore farkli olabilir (ozellikle batarya optimizasyonu ve arka plan kisitlari).
+Uygulama Android tarafında aşağıdaki yetenekleri kullanır:
 
-Uygulamanin widget ve bildirim ozellikleri icin gerekirse su izin ayarlari kontrol edilmelidir:
+- Konum (GPS) izinleri
+- Bildirim izinleri
+- Arka plan servisleri
+- Cihaz yeniden başlatıldığında servis/işleyiş devamı
+- Widget güncelleme alarmları
 
-1. Battery optimization istisnasi
+Widget davranışı cihaz üreticisine göre farklı olabilir (özellikle batarya optimizasyonu ve otomatik başlatma kısıtları).
+
+Gerekirse şu ayarları kontrol et:
+
+1. Battery optimization istisnası
 2. Bildirim izinleri
-3. Otomatik baslatma (ureticiye gore degisir)
+3. Otomatik başlatma (üreticiye göre değişir)
 
 ## Sorun Giderme
 
-### 1) Android build hatalari
+### 1) Android build hataları
+
+Windows:
 
 ```bash
 cd android
@@ -149,29 +173,30 @@ npm run android
 npx react-native start --reset-cache
 ```
 
-### 3) iOS pod hatalari (macOS)
+### 3) Cihaz görünmüyor
 
 ```bash
-cd ios
-bundle exec pod install --repo-update
-cd ..
+adb devices
 ```
 
-### 4) Cihaz gorunmuyor
+Liste boşsa:
 
-- Android: `adb devices` kontrol et
-- iOS: Xcode simulator/cihaz secimini kontrol et
+1. Emulatorün açık olduğundan emin ol
+2. Fiziksel cihazda USB hata ayıklamayı aç
+3. Gerekirse adb'yi yeniden başlat:
 
-## Proje Yapisi (Kisa)
+```bash
+adb kill-server
+adb start-server
+adb devices
+```
 
-- `src/components`: UI bilesenleri
-- `src/hooks`: Is mantigi (custom hook'lar)
-- `src/contexts`: Global state (tema, ag, konum)
+## Proje Yapısı (Kısa)
+
+- `src/components`: UI bileşenleri
+- `src/hooks`: İş mantığı (custom hook'lar)
+- `src/contexts`: Global state (tema, ağ, konum)
 - `src/services`: Storage ve widget servisleri
 - `src/api`: Diyanet API entegrasyonu
-- `android`: Native Android kodlari (widget dahil)
-- `ios`: Native iOS proje dosyalari
+- `android`: Native Android kodları (widget dahil)
 
-## Lisans
-
-Bu projede lisans dosyasi bulunmuyorsa varsayilan olarak tum haklari saklidir. Acik kaynak yapmak istersen `LICENSE` dosyasi ekleyebilirsin.
