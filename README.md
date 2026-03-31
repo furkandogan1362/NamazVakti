@@ -1,79 +1,177 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# NamazVakti
 
-# Getting Started
+Konum tabanli namaz vakitleri uygulamasi (React Native + TypeScript).
 
->**Note**: Make sure you have completed the [React Native - Environment Setup](https://reactnative.dev/docs/environment-setup) instructions till "Creating a new application" step, before proceeding.
+Bu dokuman, uygulamayi sifirdan kendi bilgisayarina kurup calistirmak isteyen kullanicilar ve gelistiriciler icin hazirlandi.
 
-## Step 1: Start the Metro Server
+## Ozellikler
 
-First, you will need to start **Metro**, the JavaScript _bundler_ that ships _with_ React Native.
+- Gunluk / haftalik / aylik namaz vakitleri
+- GPS ve manuel konum secimi
+- Cevrimdisi calisma icin yerel onbellek
+- Kible pusulasi
+- Android ana ekran widget destegi
+- Acik / koyu tema
 
-To start Metro, run the following command from the _root_ of your React Native project:
+## Teknoloji Yigini
+
+- React Native 0.75.3
+- React 18.3.1
+- TypeScript
+- Axios
+- AsyncStorage
+- NetInfo
+- Reanimated
+- Android native module (Kotlin)
+
+## Gereksinimler
+
+Asagidaki araclarin bilgisayarinda kurulu olmasi gerekir:
+
+1. Node.js 18+ (proje `node >=18` bekliyor)
+2. npm (Node ile gelir)
+3. Git
+4. Java Development Kit (JDK) 17 (Android build icin onerilir)
+5. Android Studio (Android SDK + emulator)
+6. Android SDK Platform Tools (`adb` komutu PATH icinde olmali)
+7. iOS icin (sadece macOS): Xcode + CocoaPods
+8. iOS icin Ruby (Gemfile ile pod surumu yonetiliyor)
+
+Resmi React Native ortam kurulum rehberi:
+
+- https://reactnative.dev/docs/environment-setup
+
+Not: Bu proje React Native CLI tabanlidir, Expo projesi degildir.
+
+## 1) Repoyu Indir
 
 ```bash
-# using npm
+git clone https://github.com/furkandogan1362/NamazVakti.git
+cd NamazVakti
+```
+
+## 2) JavaScript Bagimliliklarini Kur
+
+```bash
+npm install
+```
+
+## 3) iOS Bagimliliklari (yalnizca macOS)
+
+Once gem bagimliliklarini kur:
+
+```bash
+bundle install
+```
+
+Ardindan CocoaPods kurulumunu yap:
+
+```bash
+cd ios
+bundle exec pod install
+cd ..
+```
+
+Not: `bundle` kullanmadan `pod install` da calisir, ancak Gemfile surum kilitlemesi nedeniyle `bundle exec pod install` tercih edilir.
+
+## 4) Android Ortamini Hazirla
+
+Android Studio icinde su adimlari tamamla:
+
+1. Android SDK kurulu olsun
+2. En az bir emulator (AVD) olustur
+3. Emulatoru baslat veya USB debug acik fiziksel cihaz bagla
+
+Windows icin yaygin PATH degiskenleri:
+
+- `ANDROID_HOME` veya `ANDROID_SDK_ROOT`
+- `%ANDROID_HOME%\platform-tools`
+- `%ANDROID_HOME%\emulator`
+
+`adb devices` komutunda cihaz/emulator gorunuyorsa hazirsin.
+
+## 5) Uygulamayi Calistir
+
+### Gelistirme sunucusu (Metro)
+
+```bash
 npm start
-
-# OR using Yarn
-yarn start
 ```
 
-## Step 2: Start your Application
+### Android
 
-Let Metro Bundler run in its _own_ terminal. Open a _new_ terminal from the _root_ of your React Native project. Run the following command to start your _Android_ or _iOS_ app:
-
-### For Android
+Ayri bir terminalde:
 
 ```bash
-# using npm
 npm run android
-
-# OR using Yarn
-yarn android
 ```
 
-### For iOS
+### iOS (sadece macOS)
+
+Ayri bir terminalde:
 
 ```bash
-# using npm
 npm run ios
-
-# OR using Yarn
-yarn ios
 ```
 
-If everything is set up _correctly_, you should see your new app running in your _Android Emulator_ or _iOS Simulator_ shortly provided you have set up your emulator/simulator correctly.
+## Kullanilabilir NPM Scriptleri
 
-This is one way to run your app — you can also run it directly from within Android Studio and Xcode respectively.
+- `npm start` -> Metro bundler
+- `npm run android` -> Android debug calistirma
+- `npm run ios` -> iOS debug calistirma
+- `npm run lint` -> ESLint kontrolu
+- `npm test` -> Jest testleri
 
-## Step 3: Modifying your App
+## Android Widget Notu
 
-Now that you have successfully run the app, let's modify it.
+Proje Android tarafinda native widget modulune sahiptir. Widget davranisi cihaz ureticisine gore farkli olabilir (ozellikle batarya optimizasyonu ve arka plan kisitlari).
 
-1. Open `App.tsx` in your text editor of choice and edit some lines.
-2. For **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Developer Menu** (<kbd>Ctrl</kbd> + <kbd>M</kbd> (on Window and Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (on macOS)) to see your changes!
+Uygulamanin widget ve bildirim ozellikleri icin gerekirse su izin ayarlari kontrol edilmelidir:
 
-   For **iOS**: Hit <kbd>Cmd ⌘</kbd> + <kbd>R</kbd> in your iOS Simulator to reload the app and see your changes!
+1. Battery optimization istisnasi
+2. Bildirim izinleri
+3. Otomatik baslatma (ureticiye gore degisir)
 
-## Congratulations! :tada:
+## Sorun Giderme
 
-You've successfully run and modified your React Native App. :partying_face:
+### 1) Android build hatalari
 
-### Now what?
+```bash
+cd android
+gradlew clean
+cd ..
+npm run android
+```
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [Introduction to React Native](https://reactnative.dev/docs/getting-started).
+### 2) Metro cache temizleme
 
-# Troubleshooting
+```bash
+npx react-native start --reset-cache
+```
 
-If you can't get this to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+### 3) iOS pod hatalari (macOS)
 
-# Learn More
+```bash
+cd ios
+bundle exec pod install --repo-update
+cd ..
+```
 
-To learn more about React Native, take a look at the following resources:
+### 4) Cihaz gorunmuyor
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+- Android: `adb devices` kontrol et
+- iOS: Xcode simulator/cihaz secimini kontrol et
+
+## Proje Yapisi (Kisa)
+
+- `src/components`: UI bilesenleri
+- `src/hooks`: Is mantigi (custom hook'lar)
+- `src/contexts`: Global state (tema, ag, konum)
+- `src/services`: Storage ve widget servisleri
+- `src/api`: Diyanet API entegrasyonu
+- `android`: Native Android kodlari (widget dahil)
+- `ios`: Native iOS proje dosyalari
+
+## Lisans
+
+Bu projede lisans dosyasi bulunmuyorsa varsayilan olarak tum haklari saklidir. Acik kaynak yapmak istersen `LICENSE` dosyasi ekleyebilirsin.
